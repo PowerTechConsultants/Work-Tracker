@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  server:
+    name: Server
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check (server)
+        run: npm run typecheck
+
+      - name: Lint (server)
+        run: npm run lint -w server
+
+      - name: Build (server)
+        run: npm run build -w server
+
+      - name: Setup test database
+        run: npm run setup
+        env:
+          ADMIN_EMAIL: test@example.com
+          ADMIN_PASSWORD: TestPassword123!
+
+      - name: Run tests
+        run: npm test -w server
+        continue-on-error: false
+
+  web:
+    name: Frontend
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check (web)
+        run: npm run typecheck -w web
+
+      - name: Lint (web)
+        run: npm run lint -w web
+
+      - name: Build (web)
+        run: npm run build -w web

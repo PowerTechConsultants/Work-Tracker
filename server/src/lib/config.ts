@@ -1,0 +1,42 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
+function env(name: string, fallback?: string): string {
+  const v = process.env[name] ?? fallback;
+  if (v === undefined) throw new Error(`Missing env: ${name}`);
+  return v;
+}
+
+export function parseCorsOrigins(value: string): string[] {
+  const trimmed = value.trim();
+  if (!trimmed) return ['http://localhost:3000', 'http://localhost:3001'];
+  return trimmed.split(',').map((entry) => entry.trim()).filter(Boolean);
+}
+
+export const config = {
+  nodeEnv: env('NODE_ENV', 'development'),
+  port: Number(env('PORT', '4000')),
+  corsOrigin: parseCorsOrigins(env('CORS_ORIGIN', 'http://localhost:3000, http://localhost:3001')),
+  jwtAccessSecret: env('JWT_ACCESS_SECRET', 'dev-access-secret-change-in-production'),
+  jwtRefreshSecret: env('JWT_REFRESH_SECRET', 'dev-refresh-secret-change-in-production'),
+  jwtAccessTtl: env('JWT_ACCESS_TTL', '15m'),
+  jwtRefreshTtlDays: Number(env('JWT_REFRESH_TTL_DAYS', '30')),
+  maxLoginAttempts: Number(env('MAX_LOGIN_ATTEMPTS', '5')),
+  lockoutMinutes: Number(env('LOCKOUT_MINUTES', '15')),
+  uploadDir: env('UPLOAD_DIR', 'uploads'),
+  cookieSecure: env('COOKIE_SECURE', (process.env.NODE_ENV === 'production').toString()) === 'true',
+};
+
+if (config.nodeEnv === 'production') {
+  const blockedSecrets = [
+    'dev-access-secret-change-in-production',
+    'dev-refresh-secret-change-in-production',
+    'change_me_access',
+    'change_me_refresh',
+  ];
+  const hasWeak = blockedSecrets.includes(config.jwtAccessSecret) || blockedSecrets.includes(config.jwtRefreshSecret);
+  const tooShort = config.jwtAccessSecret.length < 32 || config.jwtRefreshSecret.length < 32;
+  if (hasWeak || tooShort) {
+    throw new Error('[CONFIG] FATAL: JWT secrets must be unique, at least 32 characters, and not default/example values. Set JWT_ACCESS_SECRET and JWT_REFRESH_SECRET env vars.');
+  }
+}

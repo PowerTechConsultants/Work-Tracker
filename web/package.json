@@ -1,0 +1,44 @@
+{
+  "name": "employee-work-tracker-web",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3000",
+    "dev:https": "node scripts/gen-cert.mjs && next dev --experimental-https --experimental-https-key certs/key.pem --experimental-https-cert certs/cert.pem --port 3000",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.60.0",
+    "@types/qrcode": "^1.5.6",
+    "axios": "^1.7.0",
+    "clsx": "^2.1.0",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
+    "lucide-react": "^0.460.0",
+    "next": "^15.1.0",
+    "qrcode": "^1.5.4",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "recharts": "^3.10.0",
+    "socket.io-client": "^4.8.3",
+    "sonner": "^2.0.8",
+    "tailwind-merge": "^2.6.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.0.0",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "eslint": "^9",
+    "eslint-config-next": "^15.1.0",
+    "selfsigned": "^5.5.0",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
