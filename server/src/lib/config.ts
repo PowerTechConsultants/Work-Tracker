@@ -15,7 +15,7 @@ export function parseCorsOrigins(value: string): string[] {
 
 export const config = {
   nodeEnv: env('NODE_ENV', 'development'),
-  port: Number(env('PORT', '4000')),
+  port: Number(env('API_PORT', env('PORT', '4000'))),
   corsOrigin: parseCorsOrigins(env('CORS_ORIGIN', 'http://localhost:3000, http://localhost:3001')),
   jwtAccessSecret: env('JWT_ACCESS_SECRET', 'dev-access-secret-change-in-production'),
   jwtRefreshSecret: env('JWT_REFRESH_SECRET', 'dev-refresh-secret-change-in-production'),

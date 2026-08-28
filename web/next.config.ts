@@ -29,6 +29,18 @@ const nextConfig: NextConfig = {
         source: '/socket.io/:path*',
         destination: `${apiBase}/socket.io/:path*`,
       },
+      {
+        source: '/health',
+        destination: `${apiBase}/health`,
+      },
+      {
+        source: '/ready',
+        destination: `${apiBase}/ready`,
+      },
+      {
+        source: '/api-docs/:path*',
+        destination: `${apiBase}/api-docs/:path*`,
+      },
     ];
   },
   webpack: (config, { dev, isServer }) => {
