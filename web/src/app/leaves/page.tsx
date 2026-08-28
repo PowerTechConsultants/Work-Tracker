@@ -192,7 +192,7 @@ export default function LeavesPage() {
       warnings.push(`Your ${form.type} leave balance isn't enough — this will use all remaining ${form.type} days and cut ${cuts.map((c) => `${c.days} day${c.days > 1 ? 's' : ''} from ${c.type}`).join(', ')}.`);
     }
     if (extraDays > 0) {
-      warnings.push(`You only have ${availableRemaining} day${availableRemaining === 1 ? '' : 's'} of leave left (out of a ${availableTotal}-day allowance). ${extraDays} day${extraDays > 1 ? 's' : ''} of this request will be Extra Leave and will NOT carry over to next year.`);
+      warnings.push(`You only have ${availableRemaining} day${availableRemaining === 1 ? '' : 's'} of leave left (out of a ${availableTotal}-day allowance). ${extraDays} day${extraDays > 1 ? 's' : ''} of this request will be Extra Leave (beyond your ${availableTotal}-day annual allowance).`);
     } else if (normalDays > 0) {
       warnings.push(`You have ${availableRemaining} day${availableRemaining === 1 ? '' : 's'} of leave left; this uses ${normalDays} day${normalDays > 1 ? 's' : ''} of them.`);
     }
@@ -325,30 +325,20 @@ export default function LeavesPage() {
               </div>
             ))}
             <div className="bg-violet-600/10 border border-violet-600/30 rounded-xl p-3 text-center">
-              <p className="text-xs text-violet-300 font-medium">Total (incl. carryover)</p>
+              <p className="text-xs text-violet-300 font-medium">Total</p>
               <p className={`text-lg font-bold mt-1 ${totalRemaining < 0 ? 'text-rose-400' : 'text-white'}`}>{Math.max(0, totalRemaining)}<span className="text-xs text-slate-500">/{balance.totalAvailable ?? balance.totalBalance}</span></p>
             </div>
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-center">
+              <p className="text-xs text-amber-300 font-medium">Extra Leave</p>
+              <p className="text-lg font-bold mt-1 text-amber-400">{balance.extraUsed ?? 0}<span className="text-xs text-slate-500"> days</span></p>
+            </div>
             <div className="bg-sky-600/10 border border-sky-600/30 rounded-xl p-3 text-center">
-              <p className="text-xs text-sky-300 font-medium">{balance.year - 1} Carryover</p>
+              <p className="text-xs text-sky-300 font-medium">Carryover</p>
               <p className="text-lg font-bold mt-1 text-sky-400">{balance.carryover ?? 0}<span className="text-xs text-slate-500"> days</span></p>
             </div>
           </div>
         )}
 
-        {balance && (balance.extraUsed ?? 0) > 0 && (
-          <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <div>
-                <h2 className="text-lg font-bold text-amber-300">Extra Leave</h2>
-                <p className="text-xs text-slate-400 mt-0.5">Leave used beyond the {balance.totalAvailable - (balance.carryover ?? 0)}-day annual limit. Extra leave does not carry over to next year.</p>
-              </div>
-              <div className="text-right">
-                <p className="text-2xl font-bold text-amber-400">{balance.extraUsed}</p>
-                <p className="text-xs text-slate-400">days used</p>
-              </div>
-            </div>
-          </div>
-        )}
 
         <ResponsiveTable
           columns={leaveColumns}

@@ -5,6 +5,7 @@ import { cache } from '../../lib/cache';
 import { AppError } from '../../lib/app-error';
 
 const LEAVE_BALANCES: Record<'casual' | 'sick' | 'paid', number> = { casual: 8, sick: 8, paid: 12 };
+const ANNUAL_LEAVE_ALLOWANCE = LEAVE_BALANCES.casual + LEAVE_BALANCES.sick + LEAVE_BALANCES.paid; // 28 days per year (no carryover)
 
 function invalidateAnalyticsCache() {
   try {
@@ -116,9 +117,8 @@ function daysWithinYear(userId: string, start: string, end: string, year: number
 }
 
 interface LeaveUsage {
-  used: number;      // days drawn from this year's available balance (28 + carryover)
-  extraUsed: number; // days drawn beyond the available balance (extra leave, not carried)
-  carryover: number; // cumulative unused balance carried into this year from all previous years
+  used: number;      // days drawn from this year's 28-day annual allowance
+  extraUsed: number; // days taken beyond the 28-day allowance (extra leave)
 }
 
 function computeUsage(userId: string, year: number): LeaveUsage {
@@ -132,30 +132,26 @@ function computeUsage(userId: string, year: number): LeaveUsage {
     byYear.set(ry, (byYear.get(ry) ?? 0) + daysWithinYear(userId, r.start_date, r.end_date, ry));
   }
 
-  // Cumulative carryover: walk every year from the earliest year with leave up to targetYear-1.
-  // available_Y = 28 + carryover_Y ; carryover_{Y+1} = max(0, available_Y - usedNonExtra_Y)
-  const years = [...byYear.keys()].sort((a, b) => a - b);
-  const floorYear = years.length > 0 ? (years[0] as number) : year;
-  let carryover = 0;
-  for (let y = floorYear; y < year; y++) {
-    const available = 28 + carryover;
-    const totalUsed = byYear.get(y) ?? 0;
-    carryover = available - Math.min(available, totalUsed);
-  }
-
-  const available = 28 + carryover;
+  // Each year resets to a flat annual allowance (no carryover). Days beyond it are extra leave.
+  const available = ANNUAL_LEAVE_ALLOWANCE;
   const totalUsed = byYear.get(year) ?? 0;
   const nonExtraUsed = Math.min(available, totalUsed);
   const extraUsed = totalUsed - nonExtraUsed;
 
-  return { used: nonExtraUsed, extraUsed, carryover };
+  return { used: nonExtraUsed, extraUsed };
 }
 
 function computeRequestExtra(userId: string, year: number, requestedDays: number): number {
   const usage = computeUsage(userId, year);
   const usedSoFar = usage.used + usage.extraUsed; // days already attributed across all requests this year
-  const available = Math.max(0, 28 + usage.carryover - usedSoFar);
+  const available = Math.max(0, ANNUAL_LEAVE_ALLOWANCE - usedSoFar);
   return Math.max(0, requestedDays - available);
+}
+
+// Whether the user has any leave activity in years before the given year.
+function hasLeaveBefore(userId: string, year: number): boolean {
+  const rows = db.prepare("SELECT start_date, leave_year FROM leaves WHERE user_id = ? AND status IN ('approved', 'pending')").all(userId) as any[];
+  return rows.some(function (r) { return (r.leave_year ?? yearOf(r.start_date)) < year; });
 }
 
 export class LeavesService {
@@ -307,8 +303,12 @@ export class LeavesService {
       paid: { total: LEAVE_BALANCES.paid, used: LEAVE_BALANCES.paid - remainingOf('paid'), remaining: remainingOf('paid') },
     };
 
-    const totalBalance = LEAVE_BALANCES.casual + LEAVE_BALANCES.sick + LEAVE_BALANCES.paid + usage.carryover;
+    const totalBalance = ANNUAL_LEAVE_ALLOWANCE;
     const totalRemaining = Math.max(0, totalBalance - usage.used);
+
+    // Carryover: unused non-extra days from the previous year (informational only;
+    // the annual allowance stays a flat 28 days and does not include carryover).
+    const carryover = hasLeaveBefore(userId, currentYear) ? Math.max(0, ANNUAL_LEAVE_ALLOWANCE - prevUsage.used) : 0;
 
     return {
       balances,
@@ -316,13 +316,11 @@ export class LeavesService {
       totalBalance: totalBalance,
       totalAvailable: totalBalance,
       totalRemaining,
-      carryover: usage.carryover,
+      carryover,
       extraUsed: usage.extraUsed,
       totalBreakdown: {
         used: usage.used,
         extraUsed: usage.extraUsed,
-        carryover: usage.carryover,
-        priorYearExtra: prevUsage.extraUsed,
       },
       year: currentYear,
     };

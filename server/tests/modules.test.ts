@@ -178,6 +178,13 @@ describe('Leaves Module', () => {
         .set('Authorization', `Bearer ${employeeToken}`);
 
       expect(res.status).toBe(200);
+      // Leave balance uses a flat 28-day annual allowance (no carryover).
+      expect(res.body.totalBalance).toBe(28);
+      expect(res.body.totalAvailable).toBe(28);
+      expect(res.body.totalRemaining).toBe(28);
+      expect(res.body.extraUsed).toBe(0);
+      expect(res.body.carryover).toBe(0);
+      expect(res.body.totalBreakdown).toEqual({ used: 0, extraUsed: 0 });
     });
   });
 
