@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const loginSchema = z.object({
-  email: z.string().email('Invalid email format'),
+  email: z.string().email('Invalid email format').toLowerCase(),
   password: z.string().min(1, 'Password is required'),
   pendingAuthToken: z.string().min(1, 'Pending authentication token is required').optional(),
   twoFactorCode: z.string().regex(/^\d{6}$/, 'Two-factor code must be 6 digits').optional(),
@@ -30,7 +30,7 @@ export const changePasswordSchema = z.object({
 });
 
 export const forgotPasswordSchema = z.object({
-  email: z.string().email('Invalid email format'),
+  email: z.string().email('Invalid email format').toLowerCase(),
 });
 
 export const refreshTokenSchema = z.object({

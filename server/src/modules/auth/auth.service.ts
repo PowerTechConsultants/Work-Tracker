@@ -16,7 +16,8 @@ const SALT_ROUNDS = 12;
 
 export class AuthService {
   static async login(input: { email: string; password: string; pendingAuthToken?: string; twoFactorCode?: string }, userAgent?: string, ip?: string) {
-    const user = db.prepare('SELECT id, email, password_hash, role, status, employee_id, first_name, last_name, designation, department_id, phone_number, joining_date, profile_picture_url, failed_login_attempts, locked_until, two_factor_enabled, two_factor_secret FROM users WHERE email = ?').get(input.email) as any;
+    const email = input.email.toLowerCase().trim();
+    const user = db.prepare('SELECT id, email, password_hash, role, status, employee_id, first_name, last_name, designation, department_id, phone_number, joining_date, profile_picture_url, failed_login_attempts, locked_until, two_factor_enabled, two_factor_secret FROM users WHERE email = ?').get(email) as any;
     if (!user) throw new AppError(401, 'Invalid credentials');
     if (user.status !== 'active') throw new AppError(403, 'Account is not active');
     if (user.locked_until && parseUTC(user.locked_until) > new Date()) {

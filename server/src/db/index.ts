@@ -5,6 +5,13 @@ import fs from 'fs';
 
 const DB_PATH = process.env.DATABASE_PATH || path.join(process.cwd(), 'data.db');
 
+if (process.env.NODE_ENV === 'production' && !process.env.DATABASE_PATH) {
+  console.warn('[DB] WARNING: DATABASE_PATH not set — using ephemeral ./data.db. On Render this will be LOST on each deploy/restart! Set DATABASE_PATH=/data/data.db and mount a Persistent Disk at /data.');
+}
+if (DB_PATH.includes('/data/') && !fs.existsSync('/data')) {
+  console.warn('[DB] WARNING: DATABASE_PATH points to /data/ but /data mount not found — Render Disk may not be attached.');
+}
+
 const dir = path.dirname(DB_PATH);
 if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 

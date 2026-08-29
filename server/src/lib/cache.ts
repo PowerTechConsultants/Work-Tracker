@@ -39,7 +39,7 @@ function l1Del(key: string): void {
 
 function l1DelByPrefix(prefix: string): void {
   for (const key of l1Cache.keys()) {
-    if (key.startsWith(prefix)) l1Cache.delete(key);
+    if (key.includes(prefix)) l1Cache.delete(key);
   }
 }
 
@@ -72,7 +72,7 @@ export const cache = {
 
   delByPrefix(prefix: string): void {
     l1DelByPrefix(prefix);
-    delPrefixStmt.run(`${prefix}%`);
+    delPrefixStmt.run(`%${prefix}%`);
   },
 
   flush(): void {

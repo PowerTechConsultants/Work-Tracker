@@ -230,14 +230,6 @@ function AdminDashboard({ loading }: { loading: boolean }) {
     queryFn: async () => (await api.get('/tasks/employee-progress')).data,
     enabled: !loading,
   });
-  const { data: holidaysRes } = useQuery({
-    queryKey: ['holidays'],
-    queryFn: async () => (await api.get('/holidays', { params: { limit: 100 } })).data,
-    enabled: !loading,
-  });
-  const holidays = holidaysRes?.holidays ?? holidaysRes ?? [];
-  const holidayEvents = (Array.isArray(holidays) ? holidays : []).map((h: any) => ({ date: h.date, type: 'holiday' as const, status: h.type }));
-
   const progressColumns = useMemo<Column<any>[]>(() => [
     { header: 'Employee', key: 'emp', render: (e: any) => <span className="text-white font-medium">{e.firstName} {e.lastName} <span className="text-xs text-slate-500">({e.employeeId})</span></span> },
     { header: 'Total', key: 'total', render: (e: any) => <span className="text-slate-300">{e.totalTasks}</span> },
@@ -300,25 +292,6 @@ function AdminDashboard({ loading }: { loading: boolean }) {
           <ResponsiveTable columns={progressColumns} data={empProgress} rowKey={(e: any) => e.userId} />
         </div>
       )}
-
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-        <h2 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><CalendarDays className="h-4 w-4 text-sky-400" />Holidays</h2>
-        {holidayEvents.length > 0 ? (
-          <>
-            <Calendar events={holidayEvents} />
-            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-              {holidayEvents.map((ev: any, i: number) => (
-                <div key={i} className="flex items-center gap-3 text-sm">
-                  <span className="h-2 w-2 rounded-full bg-sky-500 shrink-0" />
-                  <span className="text-slate-300">{ev.date} — {ev.status}</span>
-                </div>
-              ))}
-            </div>
-          </>
-        ) : (
-          <p className="text-sm text-slate-500">No holidays scheduled.</p>
-        )}
-      </div>
 
     </div>
   );

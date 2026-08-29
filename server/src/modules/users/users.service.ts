@@ -56,6 +56,26 @@ export class UsersService {
     const passwordHash = await bcryptBreaker.call(() => bcrypt.hash(input.password, SALT_ROUNDS));
     db.prepare(`INSERT INTO users (id, employee_id, first_name, last_name, email, password_hash, role, phone_number, department_id, designation, joining_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(id, employeeId, input.firstName, input.lastName, input.email, passwordHash, input.role, input.phoneNumber ?? null, input.departmentId ?? null, input.designation ?? null, input.joiningDate ?? null);
+    // Retroactively create holiday attendance rows for existing global holidays (so new user sees them)
+    try {
+      const upcomingGlobalHolidays = db.prepare(`
+        SELECT h.date, h.name FROM holidays h
+        LEFT JOIN holiday_assignees ha ON ha.holiday_id = h.id
+        WHERE h.date >= date('now')
+        GROUP BY h.id HAVING COUNT(ha.user_id) = 0
+      `).all() as any[];
+      if (upcomingGlobalHolidays.length > 0) {
+        const insertAtt = db.prepare(`INSERT INTO attendance (id, user_id, date, status, notes, created_at, updated_at) VALUES (?, ?, ?, 'holiday', ?, datetime('now'), datetime('now')) ON CONFLICT(user_id, date) DO NOTHING`);
+        const trx = db.transaction(() => {
+          for (const h of upcomingGlobalHolidays) {
+            insertAtt.run(uuid(), id, h.date, h.name);
+          }
+        });
+        trx();
+      }
+    } catch (e) {
+      console.error('[Users] Failed to create retroactive holiday attendance for new user', e);
+    }
     return this.getById(id);
   }
 
