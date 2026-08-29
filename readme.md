@@ -39,15 +39,7 @@ npm run dev
 - **Health Check:** http://localhost:4000/health
 - **API Docs:** http://localhost:4000/api-docs
 
-### Seed Accounts
 
-| Role | Email | Password |
-|------|-------|----------|
-| Admin | admin@example.com | Admin@123 |
-| HR | hr@example.com | Hr@12345 |
-| Employee | john@example.com | John@12345 |
-| Employee | jane@example.com | Jane@12345 |
-| Employee | robert@example.com | Robert@12345 |
 
 ## Project Structure
 
