@@ -174,7 +174,7 @@ export class AttendanceService {
     const pauseHours = Math.round((pauseMinutes / 60) * 100) / 100;
     const workingHours = Math.max(0, Math.round((rawHours - pauseHours) * 100) / 100);
     const overtimeHours = Math.max(0, Math.round((workingHours - STANDARD_WORKDAY_HOURS) * 100) / 100);
-    const status = workingHours < HALF_DAY_THRESHOLD ? 'half_day' : 'work_end';
+    const status = rec.status === 'remote' ? 'remote' : (workingHours < HALF_DAY_THRESHOLD ? 'half_day' : 'work_end');
 
     await db.prepare(`UPDATE attendance SET
       logout_time = ?, working_hours = ?, overtime_hours = ?,
@@ -301,11 +301,6 @@ export class AttendanceService {
     }
     const result = { deleted, scope: { userId: input.userId ?? null, userIds: input.userIds ?? null, status: input.status ?? null, startDate: startDate ?? null, endDate: endDate ?? null, date: normalizedDate } };
     invalidateAnalyticsCache();
-    try {
-      getIO().emit('attendance:bulk', result);
-    } catch (e) {
-      console.error('[Attendance] Socket emit failed:', e);
-    }
     return result;
   }
 

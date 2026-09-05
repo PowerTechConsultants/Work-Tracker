@@ -123,7 +123,7 @@ export class HolidaysService {
     return { ...h, assignees: assignees.length > 0 ? assignees : null };
   }
 
-  static async delete(id: string, input: any) {
+  static async delete(id: string, input: any, userId: string) {
     if (input.confirm !== 'DELETE') throw new AppError(400, 'Deleting a holiday requires confirm=DELETE in the request body');
     const h = await db.prepare('SELECT id, name, date, type, created_by, created_at, updated_at FROM holidays WHERE id = ?').get(id) as any;
     if (!h) throw new AppError(404, 'Holiday not found');
@@ -157,7 +157,7 @@ export class HolidaysService {
       }
       await db.prepare('DELETE FROM holidays WHERE id = ?').run(id);
       await db.prepare("INSERT INTO activity_logs (id, actor_id, action, entity_type, entity_id, old_values, new_values, ip_address) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-        .run(uuid(), null, 'delete_holiday', 'holiday', id, JSON.stringify({ date: h.date, name: h.name }), JSON.stringify({ status: 'deleted' }), null);
+        .run(uuid(), userId, 'delete_holiday', 'holiday', id, JSON.stringify({ date: h.date, name: h.name }), JSON.stringify({ status: 'deleted' }), null);
     })();
     invalidateAnalyticsCache();
 

@@ -192,18 +192,20 @@ export class DocumentsService {
       fields.netPay = Math.round((gross - deductions) * 100) / 100;
     }
 
-    const year = new Date().getFullYear();
-    const code = DOC_TYPE_CODES[doc.doc_type as DocType] ?? 'DOC';
-    const seq = (await db.prepare(
-      "SELECT COUNT(*) AS c FROM document_requests WHERE doc_type = ? AND status = 'issued' AND YEAR(issued_at) = ?"
-    ).get(doc.doc_type, year) as any).c;
-    const docNumber = `WT-${code}-${year}-${String(seq + 1).padStart(4, '0')}`;
-
     const updated = await db.transaction(async () => {
+      const year = new Date().getFullYear();
+      const code = DOC_TYPE_CODES[doc.doc_type as DocType] ?? 'DOC';
+      const seq = (await db.prepare(
+        "SELECT COUNT(*) AS c FROM document_requests WHERE doc_type = ? AND status = 'issued' AND YEAR(issued_at) = ?"
+      ).get(doc.doc_type, year) as any).c;
+      const dn = `WT-${code}-${year}-${String(seq + 1).padStart(4, '0')}`;
+
       await db.prepare("UPDATE document_requests SET status = 'issued', fields = ?, doc_number = ?, issued_by_id = ?, issued_at = datetime('now'), updated_at = datetime('now') WHERE id = ?")
-        .run(JSON.stringify(fields), docNumber, reviewedById, id);
-      return mapDoc(await db.prepare(`${SELECT} WHERE d.id = ?`).get(id));
+        .run(JSON.stringify(fields), dn, reviewedById, id);
+      return { doc: mapDoc(await db.prepare(`${SELECT} WHERE d.id = ?`).get(id)), docNumber: dn };
     })();
+
+    const docNumber = updated.docNumber;
 
     const label = DOC_TYPE_LABELS[doc.doc_type as DocType] ?? doc.doc_type;
     const payload = {
@@ -214,13 +216,13 @@ export class DocumentsService {
     };
     await insertNotification(doc.user_id, reviewedById, payload.title, payload.message, payload.type, payload.link);
     emitNotification(doc.user_id, payload);
-    emitToUser(doc.user_id, 'documents:issued', updated);
+    emitToUser(doc.user_id, 'documents:issued', updated.doc);
 
     const recipient = await db.prepare('SELECT id, email, first_name, last_name FROM users WHERE id = ?').get(doc.user_id) as any;
     if (recipient) {
       try { await sendDocumentReady({ id: doc.id, docType: doc.doc_type, docNumber }, { id: recipient.id, email: recipient.email, firstName: recipient.first_name, lastName: recipient.last_name }); } catch (e: any) { console.error('[Email] Failed:', e.message); }
     }
-    return updated;
+    return updated.doc;
   }
 
   static async reject(id: string, reviewedById: string, role: string, reason?: string) {

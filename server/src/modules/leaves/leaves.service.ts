@@ -300,7 +300,7 @@ export class LeavesService {
   }
 
   static async getBalance(userId: string, year?: number) {
-    const currentYear = year ?? new Date().getFullYear();
+    const currentYear = year ?? parseInt(getISTDate().slice(0, 4), 10);
     const prevYear = currentYear - 1;
     const start = `${currentYear}-01-01`;
     const end = `${currentYear}-12-31`;
@@ -422,11 +422,18 @@ export class LeavesService {
   }
 
   static async cancel(id: string, userId: string, role: string) {
-    if (role !== 'director' && role !== 'hr') throw new AppError(403, 'Only directors and HR can cancel leaves');
     const leave = await db.prepare('SELECT id, user_id, type, start_date, end_date, status FROM leaves WHERE id = ?').get(id) as any;
     if (!leave) throw new AppError(404, 'Leave not found');
-    if (role === 'hr' && leave.user_id === userId) throw new AppError(403, 'HR cannot cancel their own leave');
-    if (leave.status !== 'approved') throw new AppError(409, 'Only approved leaves can be cancelled');
+
+    const isOwner = leave.user_id === userId;
+    const isAdmin = role === 'director' || role === 'hr';
+
+    // Employees can cancel their own pending leaves
+    if (!isAdmin && !isOwner) throw new AppError(403, 'Access denied');
+    if (!isAdmin && isOwner && leave.status !== 'pending') throw new AppError(409, 'Employees can only cancel pending leaves');
+    if (isAdmin && !isOwner && leave.status !== 'approved') throw new AppError(409, 'Only approved leaves can be cancelled by admin');
+    if (isAdmin && isOwner) throw new AppError(403, 'Cannot cancel your own leave — ask another admin');
+    if (leave.status === 'cancelled') throw new AppError(409, 'Leave already cancelled');
 
     const today = getISTDate();
     if (today >= leave.start_date && today <= leave.end_date) {

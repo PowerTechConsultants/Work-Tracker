@@ -51,7 +51,7 @@ router.post('/:id/run', requireRole('director', 'hr'), requireUuid('id'), async 
   } catch (err) { next(err); }
 });
 
-router.get('/:id/results', requireUuid('id'), async (req: Request, res: Response, next) => {
+router.get('/:id/results', requireRole('director', 'hr'), requireUuid('id'), async (req: Request, res: Response, next) => {
   try {
     const results = await ScheduledReportsService.getResults(req.params.id!);
     res.json(results);

@@ -18,7 +18,8 @@ router.get('/balance', apiCache({ ttl: 60_000 }), async (req: Request, res: Resp
     if (targetId !== req.user!.sub && req.user!.role !== 'director' && req.user!.role !== 'hr') {
       throw new AppError(403, 'Forbidden');
     }
-    const year = req.query.year ? Math.min(2100, Math.max(2000, parseInt(req.query.year as string, 10))) : undefined;
+    const rawYear = parseInt(req.query.year as string, 10);
+    const year = req.query.year && !isNaN(rawYear) ? Math.min(2100, Math.max(2000, rawYear)) : undefined;
     const balance = await LeavesService.getBalance(targetId, year);
     res.json(balance);
   } catch (err) { next(err); }

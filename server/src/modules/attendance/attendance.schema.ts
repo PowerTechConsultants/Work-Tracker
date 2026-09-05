@@ -35,6 +35,10 @@ export const listAttendanceSchema = z.object({
   startDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD format').optional(),
   endDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD format').optional(),
   status: z.enum(attendanceStatuses).optional(),
+  statuses: z.preprocess(
+    (val) => (val === undefined || val === null ? val : Array.isArray(val) ? val : [val]),
+    z.array(z.enum(attendanceStatuses)).optional()
+  ),
 });
 
 export const updateAttendanceSchema = z.object({

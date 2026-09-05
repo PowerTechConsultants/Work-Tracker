@@ -88,8 +88,8 @@ export class FilesService {
       const assigned = await db.prepare(
         `SELECT 1 FROM task_assignments ta
          JOIN task_attachments att ON att.task_id = ta.task_id
-         WHERE att.id = ? AND ta.user_id = ?`
-      ).get(fileId, userId);
+         WHERE att.file_url = ? AND ta.user_id = ?`
+      ).get(row.url, userId);
       if (!assigned) throw new AppError(403, 'Access denied');
     }
 

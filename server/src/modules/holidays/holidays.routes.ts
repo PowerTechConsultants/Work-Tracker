@@ -30,7 +30,7 @@ router.post('/', validate(createHolidaySchema), async (req: Request, res: Respon
 
 router.delete('/:id', requireRole('director'), requireUuid('id'), validate(deleteHolidaySchema), async (req: Request, res: Response, next) => {
   try {
-    const result = await HolidaysService.delete(req.params.id!, req.body);
+    const result = await HolidaysService.delete(req.params.id!, req.body, req.user!.sub);
     cache.delByPrefix('/api/v1/holidays');
     res.json(result);
   } catch (err) { next(err); }

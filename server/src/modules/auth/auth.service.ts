@@ -226,7 +226,7 @@ export class AuthService {
     if (stored.revoked_at && parseUTC(stored.revoked_at) <= new Date()) {
       // Replay of an already-revoked token: revoke every session for this user.
       await db.transaction(async () => {
-        revokeUserTokens(payload.sub);
+        await revokeUserTokens(payload.sub);
         await db.prepare("UPDATE refresh_tokens SET revoked_at = datetime('now') WHERE user_id = ?").run(payload.sub);
       })();
       throw new AppError(401, 'Refresh token revoked');
@@ -254,7 +254,7 @@ export class AuthService {
   static async logout(refreshToken: string) {
     try {
       const payload = verifyRefreshToken(refreshToken);
-      revokeUserTokens(payload.sub);
+      await revokeUserTokens(payload.sub);
       await db.prepare("UPDATE refresh_tokens SET revoked_at = datetime('now') WHERE user_id = ?").run(payload.sub);
     } catch (e) { console.error('[LOGOUT] Failed to revoke token:', e); }
   }
@@ -280,7 +280,7 @@ export class AuthService {
     await db.transaction(async () => {
       await db.prepare("UPDATE users SET password_hash = ?, failed_login_attempts = 0, locked_until = NULL, updated_at = datetime('now') WHERE id = ?").run(newHash, userId);
       await recordPassword(userId, newHash);
-      revokeUserTokens(userId);
+      await revokeUserTokens(userId);
       await db.prepare("UPDATE refresh_tokens SET revoked_at = datetime('now') WHERE user_id = ?").run(userId);
     })();
   }
@@ -354,7 +354,7 @@ export class AuthService {
       await recordPassword(row.user_id, passwordHash);
       await db.prepare("UPDATE password_reset_tokens SET used_at = datetime('now') WHERE id = ?").run(row.id);
       await db.prepare("UPDATE refresh_tokens SET revoked_at = datetime('now') WHERE user_id = ?").run(row.user_id);
-      revokeUserTokens(row.user_id);
+      await revokeUserTokens(row.user_id);
     })();
   }
 }

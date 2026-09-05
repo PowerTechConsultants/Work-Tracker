@@ -96,6 +96,9 @@ export class AnalyticsService {
     const totalByType: Record<string, number> = {};
     for (const t of types) totalByType[t] = 0;
 
+    // Fetch holidays for the year to exclude them from leave counting
+    const holidays = (await db.prepare('SELECT date FROM holidays WHERE date >= ? AND date <= ?').all(start, end) as any[]).map((h: any) => h.date);
+
     for (const l of leaves) {
       const parseDate = (s: string) => new Date(`${s}T00:00:00.000Z`);
       const clipStart = parseDate(l.start_date) < parseDate(start) ? parseDate(start) : parseDate(l.start_date);
@@ -104,7 +107,8 @@ export class AnalyticsService {
       let cursor = new Date(clipStart);
       while (cursor <= clipEnd) {
         const dayOfWeek = cursor.getUTCDay();
-        if (dayOfWeek !== 0) {
+        const dateStr = cursor.toISOString().split('T')[0]!;
+        if (dayOfWeek !== 0 && !holidays.includes(dateStr)) {
           const monthKey = String(cursor.getUTCMonth() + 1).padStart(2, '0');
           const entry = monthlyMap.get(monthKey);
           if (entry) entry[l.type] = (entry[l.type] ?? 0) + 1;

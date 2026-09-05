@@ -17,9 +17,10 @@ export class NotificationsService {
     const conds: string[] = ['recipient_id = ?']; const params: any[] = [userId];
     if (unreadOnly) { conds.push('read_at IS NULL'); }
     const where = `WHERE ${conds.join(' AND ')}`;
+    const total = (await db.prepare(`SELECT count(*) as c FROM notifications ${where}`).get(...params) as any).c;
     const rows = await db.prepare(`SELECT id, recipient_id, sender_id, title, message, type, link, channel, read_at, created_at FROM notifications ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`).all(...params, limit, offset);
     const unreadCount = (await db.prepare('SELECT count(*) as c FROM notifications WHERE recipient_id = ? AND read_at IS NULL').get(userId) as any).c;
-    return { notifications: rows.map(mapNotification), total: rows.length, unreadCount, page, limit };
+    return { notifications: rows.map(mapNotification), total, unreadCount, page, limit };
   }
 
   static async create(recipientId: string, senderId: string | null, title: string, message: string, type: string, link?: string, channel: 'in_app' | 'email' | 'both' = 'in_app') {
