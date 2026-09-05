@@ -29,7 +29,7 @@ export function requireUuid(...paramNames: string[]) {
   return (req: Request, res: Response, next: NextFunction): void => {
     for (const name of paramNames) {
       const val = req.params[name];
-      if (val && !UUID_RE.test(val)) {
+      if (val !== undefined && val !== null && !UUID_RE.test(val)) {
         res.status(400).json({ error: `Invalid ${name} format` });
         return;
       }

@@ -84,7 +84,7 @@ export class PlansService {
       if (!plan) throw new AppError(404, 'Plan not found');
       if (plan.status !== 'submitted') throw new AppError(409, 'Plan not in reviewable state');
       if (plan.user_id === reviewedById) throw new AppError(403, 'Cannot review your own plan');
-      await db.prepare("UPDATE work_plans SET status = ?, review_comment = ?, reviewed_by_id = ?, reviewed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?")
+      await db.prepare("UPDATE work_plans SET status = ?, review_comment = ?, reviewed_by_id = ?, reviewed_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND status = 'submitted'")
         .run(status, comments ?? null, reviewedById, id);
       await db.prepare('INSERT INTO notifications (id, recipient_id, sender_id, title, message, type, link) VALUES (?, ?, ?, ?, ?, ?, ?)')
         .run(uuid(), plan.user_id, reviewedById, `Plan ${status}`, `Your work plan has been ${status}`, status === 'approved' ? 'success' : 'warning', `/plans/${id}`);

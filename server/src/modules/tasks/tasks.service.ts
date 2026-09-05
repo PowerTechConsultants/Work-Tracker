@@ -151,17 +151,17 @@ export class TasksService {
         }
         sets.push('status = ?'); params.push(input.status);
         if (input.status === 'in_progress' && !existing.started_at) sets.push("started_at = datetime('now')");
-        if (input.status === 'completed') { sets.push("completed_at = datetime('now')"); sets.push('progress_percent = 100'); }
+        if (input.status === 'completed') { sets.push("completed_at = datetime('now')"); }
         if (input.status !== 'completed') sets.push('completed_at = NULL');
         if (input.status === 'pending') sets.push('started_at = NULL');
       }
-      if (input.progressPercent !== undefined) { sets.push('progress_percent = ?'); params.push(input.progressPercent); }
+      if (input.progressPercent !== undefined) { sets.push('progress_percent = ?'); params.push(input.progressPercent); } else if (input.status === 'completed') { sets.push('progress_percent = 100'); }
       if (input.dueDate !== undefined) { sets.push('due_date = ?'); params.push(input.dueDate ? new Date(input.dueDate).toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '') : null); }
       if (input.estimatedHours !== undefined) { sets.push('estimated_hours = ?'); params.push(input.estimatedHours); }
       if (input.actualHours !== undefined) { sets.push('actual_hours = ?'); params.push(input.actualHours); }
       params.push(id);
       await db.prepare(`UPDATE tasks SET ${sets.join(', ')} WHERE id = ?`).run(...params);
-      if (input.assigneeIds) {
+      if (input.assigneeIds && input.assigneeIds.length > 0) {
         await db.prepare('DELETE FROM task_assignments WHERE task_id = ?').run(id);
         const ph = input.assigneeIds.map(() => '(?, ?)').join(', ');
         const p: any[] = [];
@@ -233,7 +233,7 @@ export class TasksService {
       if (!a) throw new AppError(404, 'Approval not found');
       if (a.status !== 'pending') throw new AppError(409, 'Already reviewed');
       if (a.requested_by_id === reviewedById) throw new AppError(403, 'Cannot review your own approval request');
-      await db.prepare("UPDATE task_approvals SET status = ?, reviewed_by_id = ?, comment = ?, reviewed_at = datetime('now') WHERE id = ?").run(status, reviewedById, comment ?? null, approvalId);
+      await db.prepare("UPDATE task_approvals SET status = ?, reviewed_by_id = ?, comment = ?, reviewed_at = datetime('now') WHERE id = ? AND status = 'pending'").run(status, reviewedById, comment ?? null, approvalId);
       await db.prepare('INSERT INTO notifications (id, recipient_id, sender_id, title, message, type, link) VALUES (?, ?, ?, ?, ?, ?, ?)')
         .run(uuid(), a.requested_by_id, reviewedById, `Task ${status}`, `Your task approval has been ${status}`, status === 'approved' ? 'success' : 'warning', `/tasks/${a.task_id}`);
       return await db.prepare('SELECT id, task_id, requested_by_id, status, request_comment, reviewed_by_id, comment, requested_at, reviewed_at FROM task_approvals WHERE id = ?').get(approvalId);

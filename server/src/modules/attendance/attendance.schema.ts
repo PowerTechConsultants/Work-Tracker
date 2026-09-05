@@ -2,8 +2,10 @@ import { z } from 'zod';
 
 const attendanceStatuses = ['present', 'on_break', 'work_end', 'absent', 'leave', 'half_day', 'holiday', 'remote'] as const;
 
+const checkInStatuses = ['present', 'remote'] as const;
+
 export const checkInSchema = z.object({
-  status: z.enum(attendanceStatuses).default('present'),
+  status: z.enum(checkInStatuses).default('present'),
   notes: z.string().trim().optional(),
   latitude: z.number().min(-90).max(90).optional(),
   longitude: z.number().min(-180).max(180).optional(),

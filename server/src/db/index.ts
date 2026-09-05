@@ -28,9 +28,12 @@ console.log(`[DB] MySQL pool: ${host}:${port}/${database}`);
 
 try {
   const conn = await pool.getConnection();
-  await conn.ping();
-  conn.release();
-  console.log('[DB] MySQL connected');
+  try {
+    await conn.ping();
+    console.log('[DB] MySQL connected');
+  } finally {
+    conn.release();
+  }
 } catch (e: any) {
   console.error('[DB] MySQL connection failed:', e.message);
 }

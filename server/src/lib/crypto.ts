@@ -14,7 +14,10 @@ export function verifyTokenHash(token: string, stored: string): boolean {
   const [salt, hash] = stored.split(':');
   if (!salt || !hash) return false;
   const verify = crypto.pbkdf2Sync(token, salt, ITERATIONS, KEY_LENGTH, DIGEST).toString('hex');
-  return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(verify, 'hex'));
+  const hashBuf = Buffer.from(hash, 'hex');
+  const verifyBuf = Buffer.from(verify, 'hex');
+  if (hashBuf.length !== verifyBuf.length) return false;
+  return crypto.timingSafeEqual(hashBuf, verifyBuf);
 }
 
 export function generateEmployeeId(seq: number): string {

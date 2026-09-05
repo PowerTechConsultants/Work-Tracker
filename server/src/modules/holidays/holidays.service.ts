@@ -30,15 +30,16 @@ function invalidateAnalyticsCache() {
 
 export class HolidaysService {
   static async create(userId: string, input: { date: string; name: string; type?: string; userIds?: string[] }) {
-    const existing = await db.prepare('SELECT id, name FROM holidays WHERE date = ?').get(input.date) as { id: string; name: string } | undefined;
-    if (existing) throw new AppError(409, `A holiday already exists for ${input.date} (${existing.name})`);
-
     const hasSpecificUsers = input.userIds && input.userIds.length > 0;
     const affectedUsers = hasSpecificUsers
       ? input.userIds as string[]
       : (await db.prepare("SELECT id FROM users WHERE status = 'active'").all() as any[]).map((u: any) => u.id);
 
     const result = await (await db.transaction(async () => {
+      // Check for existing holiday inside transaction to prevent race condition
+      const existing = await db.prepare('SELECT id, name FROM holidays WHERE date = ?').get(input.date) as { id: string; name: string } | undefined;
+      if (existing) throw new AppError(409, `A holiday already exists for ${input.date} (${existing.name})`);
+
       const id = uuid();
       await db.prepare('INSERT INTO holidays (id, date, name, type, created_by) VALUES (?, ?, ?, ?, ?)')
         .run(id, input.date, input.name, input.type ?? 'public', userId);
@@ -170,6 +171,7 @@ export class HolidaysService {
           }
         }
       }
+      await db.prepare('DELETE FROM holiday_assignees WHERE holiday_id = ?').run(id);
       await db.prepare('DELETE FROM holidays WHERE id = ?').run(id);
       await db.prepare("INSERT INTO activity_logs (id, actor_id, action, entity_type, entity_id, old_values, new_values, ip_address) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
         .run(uuid(), userId, 'delete_holiday', 'holiday', id, JSON.stringify({ date: h.date, name: h.name }), JSON.stringify({ status: 'deleted' }), null);

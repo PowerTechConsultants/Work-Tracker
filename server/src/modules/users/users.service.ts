@@ -16,6 +16,8 @@ function mapUser(u: any) {
     dob: u.dob, gender: u.gender, fatherName: u.father_name, nationality: u.nationality,
     qualification: u.qualification, addressStreet: u.address_street, addressCity: u.address_city,
     addressState: u.address_state, addressPincode: u.address_pincode,
+    profilePictureUrl: u.profile_picture_url,
+    twoFactorEnabled: !!u.two_factor_enabled, lastLoginAt: u.last_login_at,
     createdAt: u.created_at, updatedAt: u.updated_at,
   };
 }
@@ -54,9 +56,6 @@ export class UsersService {
   }
 
   static async create(input: CreateUserInput) {
-    const existing = await db.prepare('SELECT id FROM users WHERE email = ?').get(input.email);
-    if (existing) throw new AppError(409, 'Email already exists');
-
     const policy = await getPasswordPolicy();
     const { valid, errors } = await validatePassword(input.password, policy);
     if (!valid) throw new AppError(400, `Password does not meet policy: ${errors.join('; ')}`);
@@ -64,8 +63,15 @@ export class UsersService {
     const employeeId = await nextEmployeeId();
     const id = uuid();
     const passwordHash = await bcryptBreaker.call(() => bcrypt.hash(input.password, SALT_ROUNDS));
-    await db.prepare(`INSERT INTO users (id, employee_id, first_name, last_name, email, password_hash, role, phone_number, department_id, designation, joining_date, dob, gender, father_name, nationality, qualification, address_street, address_city, address_state, address_pincode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(id, employeeId, input.firstName, input.lastName, input.email, passwordHash, input.role, input.phoneNumber ?? null, input.departmentId ?? null, input.designation ?? null, input.joiningDate ?? null, input.dob, input.gender, input.fatherName, input.nationality, input.qualification, input.addressStreet, input.addressCity, input.addressState, input.addressPincode);
+
+    // Wrap email check + INSERT in transaction to prevent race condition
+    await db.transaction(async () => {
+      const existing = await db.prepare('SELECT id FROM users WHERE email = ?').get(input.email);
+      if (existing) throw new AppError(409, 'Email already exists');
+
+      await db.prepare(`INSERT INTO users (id, employee_id, first_name, last_name, email, password_hash, role, phone_number, department_id, designation, joining_date, dob, gender, father_name, nationality, qualification, address_street, address_city, address_state, address_pincode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(id, employeeId, input.firstName, input.lastName, input.email, passwordHash, input.role, input.phoneNumber ?? null, input.departmentId ?? null, input.designation ?? null, input.joiningDate ?? null, input.dob, input.gender, input.fatherName, input.nationality, input.qualification, input.addressStreet, input.addressCity, input.addressState, input.addressPincode);
+    })();
     // Retroactively create holiday attendance rows for existing global holidays (so new user sees them)
     try {
       const upcomingGlobalHolidays = await db.prepare(`

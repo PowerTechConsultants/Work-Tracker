@@ -9,7 +9,7 @@ export interface TOTPOptions {
 export async function verifyTOTP({ secret, token, window = 1 }: TOTPOptions): Promise<boolean> {
   if (!secret || !token) return false;
   try {
-    const result = verify({ secret, token, algorithm: 'sha1', digits: 6, period: 30, epochTolerance: window } as any);
+    const result = verify({ secret, token, algorithm: 'sha1', digits: 6, period: 30, window } as any);
     return !!result;
   } catch (err) {
     console.error('[TOTP] Verification error:', err instanceof Error ? err.message : err);

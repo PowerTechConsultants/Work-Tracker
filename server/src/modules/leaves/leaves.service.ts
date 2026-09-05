@@ -377,10 +377,13 @@ export class LeavesService {
   static async review(id: string, reviewedById: string, status: string, comments?: string, role?: string) {
     const leave = await db.prepare('SELECT id, user_id, type, start_date, end_date, reason, status FROM leaves WHERE id = ?').get(id) as any;
     if (!leave) throw new AppError(404, 'Leave not found');
-    if (leave.status !== 'pending') throw new AppError(409, 'Leave not in reviewable state');
     if (leave.user_id === reviewedById) throw new AppError(403, 'Cannot review your own leave request');
 
     await db.transaction(async () => {
+      // Re-read status inside transaction to prevent race condition
+      const current = await db.prepare('SELECT status FROM leaves WHERE id = ?').get(id) as any;
+      if (!current || current.status !== 'pending') throw new AppError(409, 'Leave not in reviewable state');
+
       let extra = 0;
       let leaveYear: number | null = null;
       if (status === 'approved') {
