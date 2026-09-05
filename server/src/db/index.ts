@@ -46,7 +46,7 @@ function translateSql(sql: string): string {
     .replace(/datetime\('now', '\+1 hour'\)/g, 'NOW() + INTERVAL 1 HOUR')
     .replace(/datetime\('now'\)/g, 'NOW()')
     .replace(/datetime\('now', '\+(\d+) seconds'\)/g, 'NOW() + INTERVAL $1 SECOND')
-    .replace(/date\('now', '-(\d+) days'\)/g, 'DATE_SUB(CURDATE(), INTERVAL $1 DAY)')
+    .replace(/date\('now', '-(\d+) days?'\)/g, 'DATE_SUB(CURDATE(), INTERVAL $1 DAY)')
     .replace(/date\('now', '\+' \|\| (\d+) \|\| ' days'\)/g, 'DATE_ADD(CURDATE(), INTERVAL $1 DAY)')
     .replace(/date\('now'\)/g, 'CURDATE()')
     .replace(/strftime\('%Y',\s*([^)]+)\)/g, 'YEAR($1)')

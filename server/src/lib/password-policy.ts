@@ -88,7 +88,7 @@ export async function recordPassword(userId: string, hash: string): Promise<void
   if (policy.historyCount > 0) {
     await db.prepare(
       `DELETE FROM password_history WHERE user_id = ? AND id NOT IN (
-        SELECT id FROM password_history WHERE user_id = ? ORDER BY created_at DESC LIMIT ?
+        SELECT id FROM (SELECT id FROM password_history WHERE user_id = ? ORDER BY created_at DESC LIMIT ?) AS tmp
       )`
     ).run(userId, userId, policy.historyCount);
   }

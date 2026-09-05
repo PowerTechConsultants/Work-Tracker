@@ -46,6 +46,8 @@ export function compressMiddleware() {
           compressed = zlib.brotliCompressSync(body, {
             params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 4 },
           });
+        } else if (encoding === 'deflate') {
+          compressed = zlib.deflateSync(body);
         } else {
           compressed = zlib.gzipSync(body, { level: 6 });
         }

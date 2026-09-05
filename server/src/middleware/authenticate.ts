@@ -60,9 +60,14 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     userCache.set(req.user.sub, { status: user.status, role: user.role, expiresAt: now + USER_CACHE_TTL_MS });
     req.user.role = user.role;
     next();
-  } catch {
-    // Distinguish between auth failure and server error
-    res.status(503).json({ error: 'Authentication service unavailable' });
+  } catch (err: any) {
+    // JWT verification errors are 401; actual server errors are 503
+    if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError' || err.name === 'NotBeforeError') {
+      res.status(401).json({ error: 'Invalid or expired token' });
+    } else {
+      console.error('[AUTH] Unexpected error:', err);
+      res.status(503).json({ error: 'Authentication service unavailable' });
+    }
   }
 }
 
