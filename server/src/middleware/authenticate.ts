@@ -6,12 +6,16 @@ import { isTokenRevoked } from '../lib/blacklist';
 const userCache = new Map<string, { status: string; role: string; expiresAt: number }>();
 const USER_CACHE_TTL_MS = 30_000;
 
-setInterval(() => {
+const userCacheCleanupInterval: ReturnType<typeof setInterval> = setInterval(() => {
   const now = Date.now();
   for (const [key, entry] of userCache) {
     if (entry.expiresAt <= now) userCache.delete(key);
   }
 }, 60_000);
+
+export function stopUserCacheCleanup(): void {
+  clearInterval(userCacheCleanupInterval);
+}
 
 export async function authenticate(req: Request, res: Response, next: NextFunction): Promise<void> {
   const header = req.headers.authorization;

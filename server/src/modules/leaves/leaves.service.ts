@@ -122,13 +122,13 @@ function yearOf(date: string): number {
   return new Date(`${date}T00:00:00Z`).getUTCFullYear();
 }
 
-async function daysWithinYear(userId: string, start: string, end: string, year: number): Promise<number> {
+async function daysWithinYear(userId: string, start: string, end: string, year: number, holidayCache?: Map<string, any[]>): Promise<number> {
   const yearStart = `${year}-01-01`;
   const yearEnd = `${year}-12-31`;
   const clampStart = start < yearStart ? yearStart : start;
   const clampEnd = end > yearEnd ? yearEnd : end;
   if (clampStart > clampEnd) return 0;
-  const excluded = await getExcludedDates(userId, clampStart, clampEnd);
+  const excluded = await getExcludedDates(userId, clampStart, clampEnd, holidayCache);
   const cur = new Date(`${clampStart}T00:00:00Z`);
   const endD = new Date(`${clampEnd}T00:00:00Z`);
   let count = 0;
@@ -149,10 +149,30 @@ async function computeUsage(userId: string, year: number): Promise<LeaveUsage> {
     "SELECT id, start_date, end_date, status, leave_year FROM leaves WHERE user_id = ? AND status = 'approved'"
   ).all(userId) as any[];
 
+  // Collect all (clampedStart, clampedEnd) ranges so we can batch the holiday query.
+  interface YearRange { year: number; start: string; end: string; }
+  const ranges: YearRange[] = [];
+  for (const r of requests) {
+    const ry = r.leave_year ?? yearOf(r.start_date);
+    const yearStart = `${ry}-01-01`;
+    const yearEnd = `${ry}-12-31`;
+    const clampStart = r.start_date < yearStart ? yearStart : r.start_date;
+    const clampEnd = r.end_date > yearEnd ? yearEnd : r.end_date;
+    if (clampStart <= clampEnd) ranges.push({ year: ry, start: clampStart, end: clampEnd });
+  }
+
+  // Batch fetch all holidays for the entire span once.
+  const allDates = ranges.flatMap(r => [r.start, r.end]);
+  const globalStart = allDates.length > 0 ? allDates.reduce((a, b) => a < b ? a : b) : `${year}-01-01`;
+  const globalEnd = allDates.length > 0 ? allDates.reduce((a, b) => a > b ? a : b) : `${year}-12-31`;
+  const allHolidays = await db.prepare('SELECT id, date FROM holidays WHERE date BETWEEN ? AND ?').all(globalStart, globalEnd) as any[];
+  const holidayCache = new Map<string, any[]>();
+  holidayCache.set(`${globalStart}:${globalEnd}`, allHolidays);
+
   const byYear = new Map<number, number>();
   for (const r of requests) {
     const ry = r.leave_year ?? yearOf(r.start_date);
-    byYear.set(ry, (byYear.get(ry) ?? 0) + await daysWithinYear(userId, r.start_date, r.end_date, ry));
+    byYear.set(ry, (byYear.get(ry) ?? 0) + await daysWithinYear(userId, r.start_date, r.end_date, ry, holidayCache));
   }
 
   // Each year uses pro-rated entitlement (based on joining date). Days beyond it are extra leave.

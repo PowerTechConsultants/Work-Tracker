@@ -93,7 +93,7 @@ export async function sendTaskAssignment(task: { id: string; title: string }, as
 export async function sendDocumentReady(document: { id: string; docType: string; docNumber?: string }, requester: { id: string; email: string; firstName: string; lastName: string }) {
   const base = process.env.APP_URL ?? 'http://localhost:3000';
   const subject = 'Document Ready for Download';
-  const html = `<h2>Document Ready</h2><p>Hi ${requester.firstName},</p><p>Your ${document.docType.replace(/_/g, ' ')} ${document.docNumber ? `(${document.docNumber})` : ''} is ready to download.</p><p><a href="${base}/documents">View Documents</a></p>`;
+  const html = `<h2>Document Ready</h2><p>Hi ${escapeHtml(requester.firstName)},</p><p>Your ${escapeHtml(document.docType.replace(/_/g, ' '))} ${document.docNumber ? `(${escapeHtml(document.docNumber)})` : ''} is ready to download.</p><p><a href="${base}/documents">View Documents</a></p>`;
   const ok = await sendEmail(requester.email, subject, html);
   await logEmail(requester.id, requester.email, subject, ok ? 'sent' : 'failed');
 }

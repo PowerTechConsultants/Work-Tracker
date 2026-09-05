@@ -121,4 +121,8 @@ export class SlidingWindowRateLimiter {
   async reset(key: string): Promise<void> {
     this.store.delete(key);
   }
+
+  destroy(): void {
+    clearInterval(this.cleanupInterval);
+  }
 }

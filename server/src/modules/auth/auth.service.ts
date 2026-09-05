@@ -205,13 +205,18 @@ export class AuthService {
       throw new AppError(400, `Password does not meet policy: ${errors.join('; ')}`);
     }
 
-    const employeeId = await nextEmployeeId();
     const id = uuid();
     const passwordHash = await bcryptBreaker.call(() => bcrypt.hash(input.password, SALT_ROUNDS));
 
-    await db.prepare(`INSERT INTO users (id, employee_id, first_name, last_name, email, password_hash, phone_number, department_id, designation, joining_date)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(id, employeeId, input.firstName, input.lastName, input.email, passwordHash, input.phoneNumber ?? null, input.departmentId ?? null, input.designation ?? null, input.joiningDate ?? null);
+    // Wrap employee ID generation + INSERT in a single transaction
+    // to prevent race conditions on nextEmployeeId.
+    const employeeId = await db.transaction(async () => {
+      const empId = await nextEmployeeId();
+      await db.prepare(`INSERT INTO users (id, employee_id, first_name, last_name, email, password_hash, phone_number, department_id, designation, joining_date)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(id, empId, input.firstName, input.lastName, input.email, passwordHash, input.phoneNumber ?? null, input.departmentId ?? null, input.designation ?? null, input.joiningDate ?? null);
+      return empId;
+    })();
 
     await recordPassword(id, passwordHash);
 

@@ -140,6 +140,8 @@ async function backfillAbsentDates() {
   }
 }
 
+let autoAbsentInterval: ReturnType<typeof setInterval> | null = null;
+
 export function startAutoAbsentScheduler() {
   try {
     backfillAbsentDates().catch(err => console.error('[Auto-Absent] Initial backfill error:', err));
@@ -147,7 +149,14 @@ export function startAutoAbsentScheduler() {
   } catch (err) {
     console.error('[Auto-Absent] Initial backfill error:', err);
   }
-  setInterval(() => {
+  autoAbsentInterval = setInterval(() => {
     backfillAbsentDates().catch(err => console.error('[Auto-Absent] Error:', err));
   }, CHECK_INTERVAL_MS);
+}
+
+export function stopAutoAbsentScheduler() {
+  if (autoAbsentInterval) {
+    clearInterval(autoAbsentInterval);
+    autoAbsentInterval = null;
+  }
 }

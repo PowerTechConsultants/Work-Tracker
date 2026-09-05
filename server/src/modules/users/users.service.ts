@@ -60,17 +60,21 @@ export class UsersService {
     const { valid, errors } = await validatePassword(input.password, policy);
     if (!valid) throw new AppError(400, `Password does not meet policy: ${errors.join('; ')}`);
 
-    const employeeId = await nextEmployeeId();
     const id = uuid();
     const passwordHash = await bcryptBreaker.call(() => bcrypt.hash(input.password, SALT_ROUNDS));
 
-    // Wrap email check + INSERT in transaction to prevent race condition
-    await db.transaction(async () => {
+    // Wrap employee ID generation + email check + INSERT in a single transaction
+    // to prevent race conditions on nextEmployeeId.
+    const employeeId = await db.transaction(async () => {
+      const empId = await nextEmployeeId();
+
       const existing = await db.prepare('SELECT id FROM users WHERE email = ?').get(input.email);
       if (existing) throw new AppError(409, 'Email already exists');
 
       await db.prepare(`INSERT INTO users (id, employee_id, first_name, last_name, email, password_hash, role, phone_number, department_id, designation, joining_date, dob, gender, father_name, nationality, qualification, address_street, address_city, address_state, address_pincode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(id, employeeId, input.firstName, input.lastName, input.email, passwordHash, input.role, input.phoneNumber ?? null, input.departmentId ?? null, input.designation ?? null, input.joiningDate ?? null, input.dob, input.gender, input.fatherName, input.nationality, input.qualification, input.addressStreet, input.addressCity, input.addressState, input.addressPincode);
+        .run(id, empId, input.firstName, input.lastName, input.email, passwordHash, input.role, input.phoneNumber ?? null, input.departmentId ?? null, input.designation ?? null, input.joiningDate ?? null, input.dob, input.gender, input.fatherName, input.nationality, input.qualification, input.addressStreet, input.addressCity, input.addressState, input.addressPincode);
+
+      return empId;
     })();
     // Retroactively create holiday attendance rows for existing global holidays (so new user sees them)
     try {

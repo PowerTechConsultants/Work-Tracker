@@ -29,7 +29,7 @@ class LocalStorage implements StorageProvider {
     await fs.mkdir(dir, { recursive: true });
     await fs.writeFile(fullPath, buffer);
 
-    const parts = key.split('/');
+    const parts = safeKey.split('/');
     const urlPath = `/api/v1/files/${parts.join('/')}`;
     return { url: urlPath, size: buffer.length };
   }

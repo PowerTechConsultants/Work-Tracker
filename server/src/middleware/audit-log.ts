@@ -26,7 +26,7 @@ export function auditLog() {
         requestSize,
         responseTimeMs,
         errorMessage
-      ).catch(() => {});
+      ).catch((err: any) => { console.error('[Audit] Failed to write audit log:', err.message); });
 
       return originalEnd.apply(res, args as any);
     };
