@@ -3,6 +3,7 @@ import db, { uuid } from '../../db';
 import { AppError } from '../../lib/app-error';
 import { bcryptBreaker } from '../../lib/circuit-breaker';
 import { invalidateUserCache } from '../../middleware/authenticate';
+import type { CreateUserInput, UpdateUserInput, ListUsersInput } from './users.schema';
 import { getPasswordPolicy, validatePassword } from '../../lib/password-policy';
 
 const SALT_ROUNDS = 12;
@@ -20,17 +21,16 @@ function mapUser(u: any) {
 }
 
 export async function nextEmployeeId(): Promise<string> {
-  for (let attempt = 0; attempt < 100; attempt++) {
-    const maxSeq = (await db.prepare("SELECT MAX(CAST(SUBSTR(employee_id, 5) AS INTEGER)) as max_seq FROM users").get() as any).max_seq ?? 0;
+  return await db.transaction(async () => {
+    const row = (await db.prepare("SELECT MAX(CAST(SUBSTR(employee_id, 5) AS UNSIGNED)) as max_seq FROM users").get()) as any;
+    const maxSeq = row?.max_seq ?? 0;
     const candidate = `EMP-${String(maxSeq + 1).padStart(4, '0')}`;
-    const exists = await db.prepare('SELECT 1 FROM users WHERE employee_id = ?').get(candidate);
-    if (!exists) return candidate;
-  }
-  throw new AppError(500, 'Unable to allocate a unique employee ID');
+    return candidate;
+  })();
 }
 
 export class UsersService {
-  static async list(input: any) {
+  static async list(input: ListUsersInput) {
     const { page = 1, limit = 20, role, status, departmentId, search } = input;
     const offset = (page - 1) * limit;
     const conditions: string[] = [];
@@ -53,7 +53,7 @@ export class UsersService {
     return mapUser(u);
   }
 
-  static async create(input: any) {
+  static async create(input: CreateUserInput) {
     const existing = await db.prepare('SELECT id FROM users WHERE email = ?').get(input.email);
     if (existing) throw new AppError(409, 'Email already exists');
 
@@ -89,13 +89,9 @@ export class UsersService {
     return await this.getById(id);
   }
 
-  static async update(id: string, input: any) {
+  static async update(id: string, input: UpdateUserInput) {
     if (!await db.prepare('SELECT id FROM users WHERE id = ?').get(id)) throw new AppError(404, 'User not found');
-    if (input.email) {
-      const existing = await db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(input.email, id);
-      if (existing) throw new AppError(409, 'Email already exists');
-    }
-    const allowedFields = ['firstName', 'lastName', 'email', 'phoneNumber', 'departmentId', 'designation', 'joiningDate', 'status', 'role', 'dob', 'gender', 'fatherName', 'nationality', 'qualification', 'addressStreet', 'addressCity', 'addressState', 'addressPincode'];
+    const allowedFields = ['firstName', 'lastName', 'phoneNumber', 'departmentId', 'designation', 'joiningDate', 'status', 'role', 'dob', 'gender', 'fatherName', 'nationality', 'qualification', 'addressStreet', 'addressCity', 'addressState', 'addressPincode'];
     const sets: string[] = ["updated_at = datetime('now')"];
     const params: any[] = [];
     for (const [k, v] of Object.entries(input)) {

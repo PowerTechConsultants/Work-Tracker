@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import { authenticate } from '../../middleware/authenticate';
 import { requireRole } from '../../middleware/rbac';
-import { validate } from '../../middleware/validate';
+import { validate, requireUuid } from '../../middleware/validate';
 import { listFilesSchema } from './files.schema';
 import { FilesService } from './files.service';
 
@@ -60,7 +60,7 @@ router.post('/cleanup', requireRole('director', 'hr'), async (_req: Request, res
   } catch (err) { next(err); }
 });
 
-router.get('/:id/download', async (req: Request, res: Response, next) => {
+router.get('/:id/download', requireUuid('id'), async (req: Request, res: Response, next) => {
   try {
     const { buffer, filename, mimeType } = await FilesService.download(req.params.id!, req.user!.sub, req.user!.role);
     res.setHeader('Content-Type', mimeType);
@@ -69,7 +69,7 @@ router.get('/:id/download', async (req: Request, res: Response, next) => {
   } catch (err) { next(err); }
 });
 
-router.delete('/:id', async (req: Request, res: Response, next) => {
+router.delete('/:id', requireUuid('id'), async (req: Request, res: Response, next) => {
   try {
     await FilesService.delete(req.params.id!, req.user!.sub, req.user!.role);
     res.status(204).end();

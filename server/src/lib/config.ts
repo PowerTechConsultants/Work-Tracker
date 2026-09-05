@@ -25,6 +25,7 @@ export const config = {
   lockoutMinutes: Number(env('LOCKOUT_MINUTES', '15')),
   uploadDir: env('UPLOAD_DIR', 'uploads'),
   cookieSecure: env('COOKIE_SECURE', (process.env.NODE_ENV === 'production').toString()) === 'true',
+  adminPassword: env('ADMIN_PASSWORD', 'Admin@123456'),
   smtp: {
     host: process.env.SMTP_HOST || '',
     port: Number(process.env.SMTP_PORT || '587'),

@@ -33,17 +33,20 @@ export class RateLimitStore {
     const pk = this.prefixed(key);
     try {
       const now = new Date().toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
-      const existing = await db.prepare('SELECT hits, expires_at FROM rate_limits WHERE `key` = ?').get(pk) as any;
+      const resetTime = new Date(Date.now() + this.windowMs);
+      const resetStr = resetTime.toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
 
-      if (!existing || existing.expires_at <= now) {
-        const resetTime = new Date(Date.now() + this.windowMs);
-        const resetStr = resetTime.toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
-        await db.prepare('REPLACE INTO rate_limits (`key`, hits, expires_at) VALUES (?, 1, ?)').run(pk, resetStr);
-        return { totalHits: 1, resetTime };
-      }
+      // Atomic: insert-or-update in one statement, returns affected rows
+      const [result] = await db.prepare(
+        `INSERT INTO rate_limits (\`key\`, hits, expires_at) VALUES (?, 1, ?)
+         ON DUPLICATE KEY UPDATE
+           hits = IF(expires_at <= ?, 1, hits + 1),
+           expires_at = IF(expires_at <= ?, ?, expires_at)`
+      ).run(pk, resetStr, now, now, resetStr) as any;
 
-      await db.prepare('UPDATE rate_limits SET hits = hits + 1 WHERE `key` = ?').run(pk);
-      return { totalHits: existing.hits + 1, resetTime: new Date(existing.expires_at) };
+      // Read the current state after atomic upsert
+      const row = await db.prepare('SELECT hits, expires_at FROM rate_limits WHERE `key` = ?').get(pk) as any;
+      return { totalHits: row?.hits ?? 1, resetTime: new Date(row?.expires_at ?? resetStr) };
     } catch (err) {
       console.error('[RATE-LIMIT] Store unavailable, failing open:', err);
       return { totalHits: 1, resetTime: new Date(Date.now() + this.windowMs) };

@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { validate } from '../../middleware/validate';
+import { validate, requireUuid } from '../../middleware/validate';
 import { authenticate } from '../../middleware/authenticate';
 import { requireRole } from '../../middleware/rbac';
 import { createScheduleSchema, updateScheduleSchema, listSchedulesSchema } from './scheduled-reports.schema';
@@ -16,7 +16,7 @@ router.get('/', requireRole('director', 'hr'), validate(listSchedulesSchema, 'qu
   } catch (err) { next(err); }
 });
 
-router.get('/:id', requireRole('director', 'hr'), async (req: Request, res: Response, next) => {
+router.get('/:id', requireRole('director', 'hr'), requireUuid('id'), async (req: Request, res: Response, next) => {
   try {
     const schedule = await ScheduledReportsService.getById(req.params.id!);
     res.json(schedule);
@@ -30,28 +30,28 @@ router.post('/', requireRole('director', 'hr'), validate(createScheduleSchema), 
   } catch (err) { next(err); }
 });
 
-router.patch('/:id', requireRole('director', 'hr'), validate(updateScheduleSchema), async (req: Request, res: Response, next) => {
+router.patch('/:id', requireRole('director', 'hr'), requireUuid('id'), validate(updateScheduleSchema), async (req: Request, res: Response, next) => {
   try {
     const schedule = await ScheduledReportsService.update(req.params.id!, req.user!.sub, req.body);
     res.json(schedule);
   } catch (err) { next(err); }
 });
 
-router.delete('/:id', requireRole('director', 'hr'), async (req: Request, res: Response, next) => {
+router.delete('/:id', requireRole('director', 'hr'), requireUuid('id'), async (req: Request, res: Response, next) => {
   try {
     const result = await ScheduledReportsService.delete(req.params.id!, req.user!.sub, req.user!.role);
     res.json(result);
   } catch (err) { next(err); }
 });
 
-router.post('/:id/run', requireRole('director', 'hr'), async (req: Request, res: Response, next) => {
+router.post('/:id/run', requireRole('director', 'hr'), requireUuid('id'), async (req: Request, res: Response, next) => {
   try {
     const result = await ScheduledReportsService.runNow(req.params.id!);
     res.json(result);
   } catch (err) { next(err); }
 });
 
-router.get('/:id/results', async (req: Request, res: Response, next) => {
+router.get('/:id/results', requireUuid('id'), async (req: Request, res: Response, next) => {
   try {
     const results = await ScheduledReportsService.getResults(req.params.id!);
     res.json(results);

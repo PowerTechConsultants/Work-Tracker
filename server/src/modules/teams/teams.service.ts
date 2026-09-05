@@ -92,7 +92,6 @@ export class TeamsService {
       await db.prepare(`DELETE FROM team_members WHERE team_name = ? AND user_id IN (${userIds.map(() => '?').join(',')})`).run(teamName, ...userIds);
       const remaining = (await db.prepare('SELECT count(*) as c FROM team_members WHERE team_name = ?').get(teamName) as any).c;
       if (remaining === 0) {
-        await db.prepare('DELETE FROM team_members WHERE team_name = ?').run(teamName);
         return { message: 'Team deleted (no members remaining)' };
       }
       return await this.getByName(teamName);

@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { validate } from '../../middleware/validate';
+import { validate, requireUuid } from '../../middleware/validate';
 import { authenticate } from '../../middleware/authenticate';
 import { requireRole } from '../../middleware/rbac';
 import { apiCache } from '../../middleware/api-cache';
@@ -25,7 +25,7 @@ router.get('/stats', requireRole('director', 'hr'), apiCache({ ttl: 300_000 }), 
   } catch (err) { next(err); }
 });
 
-router.get('/:id', requireRole('director', 'hr'), apiCache({ ttl: 300_000 }), async (req: Request, res: Response, next) => {
+router.get('/:id', requireRole('director', 'hr'), requireUuid('id'), apiCache({ ttl: 300_000 }), async (req: Request, res: Response, next) => {
   try {
     const dept = await DepartmentsService.getById(req.params.id!);
     res.json(dept);
@@ -40,7 +40,7 @@ router.post('/', requireRole('director'), validate(createDepartmentSchema), asyn
   } catch (err) { next(err); }
 });
 
-router.patch('/:id', requireRole('director'), validate(updateDepartmentSchema), async (req: Request, res: Response, next) => {
+router.patch('/:id', requireRole('director'), requireUuid('id'), validate(updateDepartmentSchema), async (req: Request, res: Response, next) => {
   try {
     const dept = await DepartmentsService.update(req.params.id!, req.body);
     cache.delByPrefix('/api/v1/departments');
@@ -48,7 +48,7 @@ router.patch('/:id', requireRole('director'), validate(updateDepartmentSchema), 
   } catch (err) { next(err); }
 });
 
-router.delete('/:id', requireRole('director'), async (req: Request, res: Response, next) => {
+router.delete('/:id', requireRole('director'), requireUuid('id'), async (req: Request, res: Response, next) => {
   try {
     const result = await DepartmentsService.delete(req.params.id!);
     cache.delByPrefix('/api/v1/departments');

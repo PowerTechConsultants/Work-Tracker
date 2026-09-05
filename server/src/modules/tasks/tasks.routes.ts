@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { validate } from '../../middleware/validate';
+import { validate, requireUuid } from '../../middleware/validate';
 import { authenticate } from '../../middleware/authenticate';
 import { requireRole } from '../../middleware/rbac';
 import { apiCache } from '../../middleware/api-cache';
@@ -34,7 +34,7 @@ router.get('/employee-progress', requireRole('director', 'hr'), async (req: Requ
   } catch (err) { next(err); }
 });
 
-router.get('/:id', async (req: Request, res: Response, next) => {
+router.get('/:id', requireUuid('id'), async (req: Request, res: Response, next) => {
   try {
     const task = await TasksService.getById(req.params.id!, req.user!.sub, req.user!.role);
     res.json(task);
@@ -48,42 +48,42 @@ router.post('/', requireRole('director', 'hr'), validate(createTaskSchema), asyn
   } catch (err) { next(err); }
 });
 
-router.patch('/:id', validate(updateTaskSchema), async (req: Request, res: Response, next) => {
+router.patch('/:id', requireUuid('id'), validate(updateTaskSchema), async (req: Request, res: Response, next) => {
   try {
     const task = await TasksService.update(req.params.id!, req.body, req.user!.sub, req.user!.role);
     res.json(task);
   } catch (err) { next(err); }
 });
 
-router.delete('/:id', requireRole('director'), async (req: Request, res: Response, next) => {
+router.delete('/:id', requireRole('director'), requireUuid('id'), async (req: Request, res: Response, next) => {
   try {
     const result = await TasksService.delete(req.params.id!);
     res.json(result);
   } catch (err) { next(err); }
 });
 
-router.get('/:id/comments', async (req: Request, res: Response, next) => {
+router.get('/:id/comments', requireUuid('id'), async (req: Request, res: Response, next) => {
   try {
     const result = await TasksService.getComments(req.params.id!, req.user!.sub, req.user!.role);
     res.json(result);
   } catch (err) { next(err); }
 });
 
-router.post('/:id/comments', validate(addCommentSchema), async (req: Request, res: Response, next) => {
+router.post('/:id/comments', requireUuid('id'), validate(addCommentSchema), async (req: Request, res: Response, next) => {
   try {
     const comment = await TasksService.addComment(req.params.id!, req.user!.sub, req.body.message, req.user!.role);
     res.status(201).json(comment);
   } catch (err) { next(err); }
 });
 
-router.patch('/approvals/:approvalId', requireRole('director', 'hr'), validate(reviewApprovalSchema), async (req: Request, res: Response, next) => {
+router.patch('/approvals/:approvalId', requireRole('director', 'hr'), requireUuid('approvalId'), validate(reviewApprovalSchema), async (req: Request, res: Response, next) => {
   try {
     const approval = await TasksService.reviewApproval(req.params.approvalId!, req.user!.sub, req.body.status, req.body.comment);
     res.json(approval);
   } catch (err) { next(err); }
 });
 
-router.post('/:id/approvals', validate(requestApprovalSchema), async (req: Request, res: Response, next) => {
+router.post('/:id/approvals', requireUuid('id'), validate(requestApprovalSchema), async (req: Request, res: Response, next) => {
   try {
     const approval = await TasksService.requestApproval(req.params.id!, req.user!.sub, req.body.comment, req.user!.role);
     res.status(201).json(approval);

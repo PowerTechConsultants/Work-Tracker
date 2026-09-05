@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { validate } from '../../middleware/validate';
+import { validate, requireUuid } from '../../middleware/validate';
 import { authenticate } from '../../middleware/authenticate';
 import { requireRole } from '../../middleware/rbac';
 import { apiCache } from '../../middleware/api-cache';
@@ -39,7 +39,7 @@ router.post('/pause-end', validate(locationOptionalSchema), async (req: Request,
   } catch (err) { next(err); }
 });
 
-router.get('/events/:attendanceId', async (req: Request, res: Response, next) => {
+router.get('/events/:attendanceId', requireUuid('attendanceId'), async (req: Request, res: Response, next) => {
   try {
     const isAdmin = req.user!.role === 'director' || req.user!.role === 'hr';
     const events = isAdmin
@@ -51,8 +51,16 @@ router.get('/events/:attendanceId', async (req: Request, res: Response, next) =>
 
 router.get('/pause-log', requireRole('director', 'hr'), async (req: Request, res: Response, next) => {
   try {
-    const startDate = req.query.startDate as string | undefined;
-    const endDate = req.query.endDate as string | undefined;
+    const startDate = (req.query.startDate as string)?.trim();
+    const endDate = (req.query.endDate as string)?.trim();
+    if (startDate && !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+      res.status(400).json({ error: 'startDate must be YYYY-MM-DD format' });
+      return;
+    }
+    if (endDate && !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+      res.status(400).json({ error: 'endDate must be YYYY-MM-DD format' });
+      return;
+    }
     const events = await getPauseLog(startDate, endDate);
     res.json({ events });
   } catch (err) { next(err); }
@@ -72,10 +80,10 @@ router.get('/today-all', requireRole('director', 'hr'), apiCache({ ttl: 30_000 }
   } catch (err) { next(err); }
 });
 
-router.get('/history/:userId', requireRole('director', 'hr'), async (req: Request, res: Response, next) => {
+router.get('/history/:userId', requireRole('director', 'hr'), requireUuid('userId'), async (req: Request, res: Response, next) => {
   try {
-    const year = parseInt(req.query.year as string) || new Date().getFullYear();
-    const month = parseInt(req.query.month as string) || new Date().getMonth() + 1;
+    const year = Math.min(2100, Math.max(2000, parseInt(req.query.year as string) || new Date().getFullYear()));
+    const month = Math.min(12, Math.max(1, parseInt(req.query.month as string) || new Date().getMonth() + 1));
     const startDate = req.query.startDate as string | undefined;
     const endDate = req.query.endDate as string | undefined;
     const result = await AttendanceService.getUserHistory(req.params.userId!, year, month, startDate, endDate);
@@ -106,7 +114,7 @@ router.get('/', requireRole('director', 'hr'), validate(listAttendanceSchema, 'q
   } catch (err) { next(err); }
 });
 
-router.patch('/:id', requireRole('director', 'hr'), validate(updateAttendanceSchema), async (req: Request, res: Response, next) => {
+router.patch('/:id', requireRole('director', 'hr'), requireUuid('id'), validate(updateAttendanceSchema), async (req: Request, res: Response, next) => {
   try {
     const record = await AttendanceService.update(req.params.id!, req.body);
     res.json(record);
@@ -118,7 +126,7 @@ router.delete('/bulk', requireRole('director'), validate(deleteAttendanceSchema)
     const result = await AttendanceService.bulkDelete(req.body);
     try {
       await ActivityLogsService.create(req.user!.sub, 'bulk_delete', 'attendance', undefined, { ...result.scope, deleted: result.deleted }, req.ip);
-    } catch {}
+    } catch (e) { console.error('[ActivityLogs] Failed:', e); }
     res.json(result);
   } catch (err) { next(err); }
 });

@@ -20,7 +20,7 @@ if (url) {
     user = decodeURIComponent(u.username) || user;
     password = decodeURIComponent(u.password) || password;
     database = u.pathname.replace(/^\//, '') || database;
-  } catch {}
+  } catch (e) { console.error('[DB] URL parse error:', e); }
 }
 
 const pool = mysql.createPool({ host, port, user, password, database, waitForConnections: true, connectionLimit: 10, queueLimit: 50, enableKeepAlive: true, timezone: '+00:00', connectTimeout: 10000 });
@@ -155,7 +155,7 @@ const db = {
           await existingConn.query(`RELEASE SAVEPOINT ${sp}`);
           return result;
         } catch (e) {
-          try { await existingConn.query(`ROLLBACK TO SAVEPOINT ${sp}`); } catch {}
+          try { await existingConn.query(`ROLLBACK TO SAVEPOINT ${sp}`); } catch (rbErr) { console.error('[DB] Savepoint rollback failed:', rbErr); }
           throw e;
         }
       }
@@ -166,7 +166,7 @@ const db = {
         await conn.commit();
         return result;
       } catch (e) {
-        try { await conn.rollback(); } catch {}
+        try { await conn.rollback(); } catch (rbErr) { console.error('[DB] Transaction rollback failed:', rbErr); }
         throw e;
       } finally {
         conn.release();
@@ -190,6 +190,9 @@ async function hasColumn(table: string, column: string): Promise<boolean> {
 }
 
 async function addColumnIfMissing(table: string, column: string, ddl: string): Promise<void> {
+  if (!/^[a-z_][a-z0-9_]*$/i.test(table) || !/^[a-z_][a-z0-9_]*$/i.test(column)) {
+    throw new Error(`Invalid table or column name: ${table}.${column}`);
+  }
   if (await hasColumn(table, column)) return;
   await db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl.replace(/TEXT/g, 'VARCHAR(255)').replace(/REAL/g, 'DECIMAL(10,2)')}`);
 }
@@ -314,7 +317,7 @@ const migrations: Array<{ version: number; name: string; up: () => Promise<void>
     up: async () => {
       await db.exec(`UPDATE leaves SET type = 'proposal' WHERE type = 'paid'`);
       await db.exec(`UPDATE leaves SET deducted_from = 'proposal' WHERE deducted_from = 'paid'`);
-      try { await db.exec(`UPDATE attendance SET notes = REPLACE(notes, 'paid leave', 'proposal leave') WHERE notes LIKE '%paid leave%'`); } catch {}
+      try { await db.exec(`UPDATE attendance SET notes = REPLACE(notes, 'paid leave', 'proposal leave') WHERE notes LIKE '%paid leave%'`); } catch (e) { console.error('[DB] Migration error:', e); }
     },
   },
   {
@@ -552,6 +555,7 @@ for (const m of migrations) {
 }
 
 export default db;
+export { pool };
 export function uuid(): string { return randomUUID(); }
 
 export async function getSetting(key: string): Promise<string | null> {

@@ -59,6 +59,7 @@ class S3Storage implements StorageProvider {
   private accessKeyId: string;
   private secretAccessKey: string;
   private endpoint: string | undefined;
+  private client: any = null;
 
   constructor() {
     this.bucket = process.env.S3_BUCKET || '';
@@ -69,8 +70,9 @@ class S3Storage implements StorageProvider {
   }
 
   private async getClient() {
+    if (this.client) return this.client;
     const { S3Client } = await import('@aws-sdk/client-s3');
-    return new S3Client({
+    this.client = new S3Client({
       region: this.region,
       endpoint: this.endpoint,
       credentials: {
@@ -78,6 +80,7 @@ class S3Storage implements StorageProvider {
         secretAccessKey: this.secretAccessKey,
       },
     });
+    return this.client;
   }
 
   async upload(key: string, buffer: Buffer, mimeType: string): Promise<{ url: string; size: number }> {

@@ -8,7 +8,7 @@ import { initializeSocket, closeSocket } from './lib/socket';
 import { startAutoAbsentScheduler } from './lib/auto-absent';
 import { cleanupExpiredBlacklistEntries } from './lib/blacklist';
 import { ensureAdminBootstrap } from './db/bootstrap';
-import db from './db';
+import db, { pool } from './db';
 
 await ensureAdminBootstrap();
 
@@ -48,13 +48,13 @@ if (enableHttps) {
 
 initializeSocket(server);
 startAutoAbsentScheduler();
-setInterval(async () => {
+const cleanupTimer = setInterval(async () => {
   try {
     await db.prepare("DELETE FROM token_blacklist WHERE expires_at <= NOW()").run();
     await db.prepare("DELETE FROM rate_limits WHERE expires_at <= NOW()").run();
     await db.prepare("DELETE FROM refresh_tokens WHERE expires_at <= NOW()").run();
     await db.prepare("DELETE FROM api_cache WHERE expires_at <= NOW()").run();
-  } catch {}
+  } catch (e) { console.error('[Cleanup] Timer error:', e); }
 }, 60 * 60 * 1000);
 
 const port = config.port;
@@ -71,8 +71,10 @@ const gracefulShutdown = async (signal: string, exitCode = 0) => {
   console.log(`\n[SHUTDOWN] ${signal} received. Starting graceful shutdown...`);
   closeSocket();
   console.log('[SHUTDOWN] Socket.IO server closed');
-  server.close(() => {
+  clearInterval(cleanupTimer);
+  server.close(async () => {
     console.log('[SHUTDOWN] HTTP server closed');
+    try { await pool.end(); } catch (e) { console.error('[Shutdown] Pool close error:', e); }
     process.exit(exitCode);
   });
   setTimeout(() => {

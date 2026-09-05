@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodSchema, ZodError } from 'zod';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function validate(schema: ZodSchema, source: 'body' | 'query' | 'params' = 'body') {
   return (req: Request, res: Response, next: NextFunction): void => {
     try {
@@ -20,5 +22,18 @@ export function validate(schema: ZodSchema, source: 'body' | 'query' | 'params' 
       }
       next(err);
     }
+  };
+}
+
+export function requireUuid(...paramNames: string[]) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    for (const name of paramNames) {
+      const val = req.params[name];
+      if (val && !UUID_RE.test(val)) {
+        res.status(400).json({ error: `Invalid ${name} format` });
+        return;
+      }
+    }
+    next();
   };
 }

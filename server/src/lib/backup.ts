@@ -35,7 +35,7 @@ export async function createBackup(prefix = 'employee-tracker'): Promise<string>
       user = decodeURIComponent(u.username) || user;
       password = decodeURIComponent(u.password) || password;
       database = u.pathname.replace(/^\//, '') || database;
-    } catch {}
+    } catch (e) { console.error('[Backup] URL parse error:', e); }
   }
 
   const backupName = `${prefix}-${timestamp()}.sql`;

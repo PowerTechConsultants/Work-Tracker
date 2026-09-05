@@ -14,13 +14,19 @@ function addDays(iso: string, days: number): string {
 
 async function acquireLock(): Promise<boolean> {
   const now = Date.now();
+  const cutoff = now - CHECK_INTERVAL_MS;
+  // Atomic: update only if expired, return affected rows
+  const [result] = await db.prepare(
+    "UPDATE app_settings SET value = ? WHERE `key` = 'auto_absent_lock' AND (CAST(value AS UNSIGNED) < ? OR value = '')"
+  ).run(String(now), cutoff) as any;
+  if (result.affectedRows > 0) return true;
+  // First run — insert if not exists
   const existing = await getSetting('auto_absent_lock');
-  if (existing) {
-    const ts = Number(existing);
-    if (!isNaN(ts) && now - ts < CHECK_INTERVAL_MS) return false;
+  if (!existing) {
+    await setSetting('auto_absent_lock', String(now));
+    return true;
   }
-  await setSetting('auto_absent_lock', String(now));
-  return true;
+  return false;
 }
 
 async function releaseLock(): Promise<void> {

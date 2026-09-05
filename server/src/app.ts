@@ -187,11 +187,26 @@ export function createApp() {
   app.use(`${api}/report-templates`, reportTemplatesRoutes);
   app.use(`${api}/scheduled-reports`, scheduledReportsRoutes);
 
-  // API docs - protected in production
+  // API docs - protected in production, basic auth in dev
   if (config.nodeEnv === 'production') {
     app.use('/api-docs', authenticate, requireRole('director'), swaggerUi.serve, swaggerUi.setup(swaggerSpec));
   } else {
-    app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+    const basicAuth = (req: any, res: any, next: any) => {
+      const authHeader = req.headers.authorization;
+      if (!authHeader?.startsWith('Basic ')) {
+        res.setHeader('WWW-Authenticate', 'Basic realm="API Docs"');
+        res.status(401).json({ error: 'Authentication required' });
+        return;
+      }
+      const decoded = Buffer.from(authHeader.slice(6), 'base64').toString();
+      const [user, pass] = decoded.split(':');
+      if (user === 'admin' && pass === config.adminPassword) {
+        next();
+      } else {
+        res.status(401).json({ error: 'Invalid credentials' });
+      }
+    };
+    app.use('/api-docs', basicAuth, swaggerUi.serve, swaggerUi.setup(swaggerSpec));
   }
 
   // 404

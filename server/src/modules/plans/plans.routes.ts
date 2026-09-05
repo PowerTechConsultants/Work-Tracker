@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { validate } from '../../middleware/validate';
+import { validate, requireUuid } from '../../middleware/validate';
 import { authenticate } from '../../middleware/authenticate';
 import { requireRole } from '../../middleware/rbac';
 import { apiCache } from '../../middleware/api-cache';
@@ -31,7 +31,7 @@ router.get('/export', requireRole('director', 'hr'), async (req: Request, res: R
   } catch (err) { next(err); }
 });
 
-router.get('/:id', async (req: Request, res: Response, next) => {
+router.get('/:id', requireUuid('id'), async (req: Request, res: Response, next) => {
   try {
     const plan = await PlansService.getById(req.params.id!, req.user!.sub, req.user!.role);
     res.json(plan);
@@ -45,28 +45,28 @@ router.post('/', validate(createPlanSchema), async (req: Request, res: Response,
   } catch (err) { next(err); }
 });
 
-router.patch('/:id', validate(updatePlanSchema), async (req: Request, res: Response, next) => {
+router.patch('/:id', requireUuid('id'), validate(updatePlanSchema), async (req: Request, res: Response, next) => {
   try {
     const plan = await PlansService.update(req.params.id!, req.user!.sub, req.body);
     res.json(plan);
   } catch (err) { next(err); }
 });
 
-router.post('/:id/submit', async (req: Request, res: Response, next) => {
+router.post('/:id/submit', requireUuid('id'), async (req: Request, res: Response, next) => {
   try {
     const plan = await PlansService.submit(req.params.id!, req.user!.sub);
     res.json(plan);
   } catch (err) { next(err); }
 });
 
-router.post('/:id/review', requireRole('director', 'hr'), validate(reviewPlanSchema), async (req: Request, res: Response, next) => {
+router.post('/:id/review', requireRole('director', 'hr'), requireUuid('id'), validate(reviewPlanSchema), async (req: Request, res: Response, next) => {
   try {
     const plan = await PlansService.review(req.params.id!, req.user!.sub, req.body.status, req.body.reviewComment);
     res.json(plan);
   } catch (err) { next(err); }
 });
 
-router.delete('/:id', async (req: Request, res: Response, next) => {
+router.delete('/:id', requireUuid('id'), async (req: Request, res: Response, next) => {
   try {
     const result = await PlansService.delete(req.params.id!, req.user!.sub, req.user!.role);
     res.json(result);

@@ -212,16 +212,17 @@ export class LeavesService {
       const id = uuid();
 
       let extra = 0;
+      let workingDays: string[] = [];
       if (isAutoApprove) {
-        const dates = await workingDates(userId, startDate, endDate);
-        extra = await computeRequestExtra(userId, leaveYear, dates.length);
+        workingDays = await workingDates(userId, startDate, endDate);
+        extra = await computeRequestExtra(userId, leaveYear, workingDays.length);
       }
 
       await db.prepare('INSERT INTO leaves (id, user_id, type, start_date, end_date, reason, status, deducted_from, leave_year, extra) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
         .run(id, userId, input.type, startDate, endDate, input.reason ?? null, status, deductedFrom, leaveYear, extra);
 
       if (isAutoApprove) {
-        const dates = await workingDates(userId, startDate, endDate);
+        const dates = workingDays.length > 0 ? workingDays : await workingDates(userId, startDate, endDate);
         const notes = `${input.type} leave - ${input.reason ?? ''}`;
         const CHUNK = 500;
         for (let i = 0; i < dates.length; i += CHUNK) {

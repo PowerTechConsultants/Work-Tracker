@@ -45,10 +45,10 @@ router.post('/login', loginLimiter, validate(loginSchema), async (req: Request, 
   try {
     const result = await AuthService.login(req.body, req.headers['user-agent'], req.ip);
     if ('twoFactorRequired' in result) {
-      try { await ActivityLogsService.create(result.user.id, 'login_2fa_pending', 'auth', result.user.id, { email: req.body.email }, req.ip); } catch {}
+      try { await ActivityLogsService.create(result.user.id, 'login_2fa_pending', 'auth', result.user.id, { email: req.body.email }, req.ip); } catch (e) { console.error('[ActivityLogs] Failed:', e); }
       return res.json({ twoFactorRequired: true, pendingAuthToken: result.pendingAuthToken, user: result.user });
     }
-    try { await ActivityLogsService.create(result.user.id, 'login', 'auth', result.user.id, { email: req.body.email }, req.ip); } catch {}
+    try { await ActivityLogsService.create(result.user.id, 'login', 'auth', result.user.id, { email: req.body.email }, req.ip); } catch (e) { console.error('[ActivityLogs] Failed:', e); }
     res.cookie('accessToken', result.accessToken, ACCESS_COOKIE_OPTS);
     res.cookie('refreshToken', result.refreshToken, COOKIE_OPTS);
     res.json({ user: result.user, accessToken: result.accessToken, passwordExpired: result.passwordExpired });
@@ -58,7 +58,7 @@ router.post('/login', loginLimiter, validate(loginSchema), async (req: Request, 
 router.post('/register', authenticate, requireRole('director'), validate(registerSchema), async (req: Request, res: Response, next) => {
   try {
     const user = await AuthService.register(req.body);
-    try { await ActivityLogsService.create(req.user!.sub, 'register', 'auth', user.id, { email: req.body.email, role: req.body.role }, req.ip); } catch {}
+    try { await ActivityLogsService.create(req.user!.sub, 'register', 'auth', user.id, { email: req.body.email, role: req.body.role }, req.ip); } catch (e) { console.error('[ActivityLogs] Failed:', e); }
     res.status(201).json(user);
   } catch (err) { next(err); }
 });
@@ -91,7 +91,7 @@ router.post('/logout', async (req: Request, res: Response, next) => {
 router.post('/change-password', authenticate, validate(changePasswordSchema), async (req: Request, res: Response, next) => {
   try {
     await AuthService.changePassword(req.user!.sub, req.body);
-    try { await ActivityLogsService.create(req.user!.sub, 'change_password', 'auth', req.user!.sub, undefined, req.ip); } catch {}
+    try { await ActivityLogsService.create(req.user!.sub, 'change_password', 'auth', req.user!.sub, undefined, req.ip); } catch (e) { console.error('[ActivityLogs] Failed:', e); }
     const rt = req.cookies?.refreshToken;
     if (rt) await AuthService.logout(rt);
     res.clearCookie('refreshToken', { path: '/api/v1/auth', httpOnly: true, sameSite: 'strict', secure: isProduction });
@@ -121,7 +121,7 @@ router.post('/2fa/setup', authenticate, async (req: Request, res: Response, next
 router.post('/2fa/verify-enable', authenticate, validate(twoFactorVerifySchema), async (req: Request, res: Response, next) => {
   try {
     const result = await AuthService.verifyAndEnableTwoFactor(req.user!.sub, req.body);
-    try { await ActivityLogsService.create(req.user!.sub, 'enable_2fa', 'auth', req.user!.sub, undefined, req.ip); } catch {}
+    try { await ActivityLogsService.create(req.user!.sub, 'enable_2fa', 'auth', req.user!.sub, undefined, req.ip); } catch (e) { console.error('[ActivityLogs] Failed:', e); }
     res.json(result);
   } catch (err) { next(err); }
 });
@@ -130,7 +130,7 @@ router.post('/2fa/verify-enable', authenticate, validate(twoFactorVerifySchema),
 router.post('/2fa/disable', authenticate, validate(twoFactorDisableSchema), async (req: Request, res: Response, next) => {
   try {
     const result = await AuthService.disableTwoFactor(req.user!.sub, req.body.currentPassword);
-    try { await ActivityLogsService.create(req.user!.sub, 'disable_2fa', 'auth', req.user!.sub, undefined, req.ip); } catch {}
+    try { await ActivityLogsService.create(req.user!.sub, 'disable_2fa', 'auth', req.user!.sub, undefined, req.ip); } catch (e) { console.error('[ActivityLogs] Failed:', e); }
     res.json(result);
   } catch (err) { next(err); }
 });
@@ -148,7 +148,7 @@ const forgotPasswordLimiter = rateLimit({
 router.post('/forgot-password', forgotPasswordLimiter, validate(forgotPasswordSchema), async (req: Request, res: Response, next) => {
   try {
     const result = await AuthService.forgotPassword(req.body.email);
-    try { await ActivityLogsService.create('system', 'forgot_password', 'auth', undefined, { email: req.body.email }, req.ip); } catch {}
+    try { await ActivityLogsService.create('system', 'forgot_password', 'auth', undefined, { email: req.body.email }, req.ip); } catch (e) { console.error('[ActivityLogs] Failed:', e); }
     res.json(result);
   } catch (err) { next(err); }
 });

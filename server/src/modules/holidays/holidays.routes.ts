@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { validate } from '../../middleware/validate';
+import { validate, requireUuid } from '../../middleware/validate';
 import { authenticate } from '../../middleware/authenticate';
 import { requireRole } from '../../middleware/rbac';
 import { apiCache } from '../../middleware/api-cache';
@@ -28,7 +28,7 @@ router.post('/', validate(createHolidaySchema), async (req: Request, res: Respon
   } catch (err) { next(err); }
 });
 
-router.delete('/:id', requireRole('director'), validate(deleteHolidaySchema), async (req: Request, res: Response, next) => {
+router.delete('/:id', requireRole('director'), requireUuid('id'), validate(deleteHolidaySchema), async (req: Request, res: Response, next) => {
   try {
     const result = await HolidaysService.delete(req.params.id!, req.body);
     cache.delByPrefix('/api/v1/holidays');

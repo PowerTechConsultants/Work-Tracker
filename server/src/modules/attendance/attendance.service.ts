@@ -79,7 +79,8 @@ export class AttendanceService {
     if (existing) {
       if (existing.logout_time) throw new AppError(409, 'Already checked out today');
       if (existing.status === 'holiday') throw new AppError(403, 'Cannot check in on a holiday');
-      if (existing.status === 'absent' || existing.status === 'leave') {
+      if (existing.status === 'leave') throw new AppError(403, 'Cannot check in — approved leave for today');
+      if (existing.status === 'absent') {
         if (hasLocation) {
           await db.prepare("UPDATE attendance SET status = 'present', login_time = ?, notes = ?, latitude = ?, longitude = ?, location_accuracy = ?, location_captured_at = ?, updated_at = ? WHERE id = ?")
             .run(now, input.notes ?? null, input.latitude, input.longitude, input.accuracy ?? null, input.locationCapturedAt ?? now, now, existing.id);

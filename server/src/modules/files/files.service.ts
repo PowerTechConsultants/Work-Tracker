@@ -116,7 +116,9 @@ export class FilesService {
     const storage = getStorage();
     try {
       await storage.delete(row.storage_key);
-    } catch {}
+    } catch (e) {
+      console.error('[Files] Failed to delete from storage:', e);
+    }
 
     await db.prepare('DELETE FROM file_uploads WHERE id = ?').run(fileId);
   }
@@ -194,7 +196,9 @@ export class FilesService {
           await storage.delete(file.storage_key);
           await db.prepare('DELETE FROM file_uploads WHERE id = ?').run(file.id);
           deleted++;
-        } catch {}
+        } catch (e) {
+          console.error('[Files] Cleanup failed for file:', file.id, e);
+        }
       }
     }
 

@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import db, { uuid } from '../../db';
 import { config } from '../../lib/config';
 import { signAccessToken, signRefreshToken, signPendingAuthToken, verifyPendingAuthToken, verifyRefreshToken } from '../../lib/jwt';
+import type { RegisterInput } from './auth.schema';
 import { hashToken, verifyTokenHash } from '../../lib/crypto';
 import { revokeUserTokens } from '../../lib/blacklist';
 import { parseUTC } from '../../lib/time';
@@ -193,7 +194,7 @@ export class AuthService {
     return { enabled: false };
   }
 
-  static async register(input: any) {
+  static async register(input: RegisterInput) {
     const existing = await db.prepare('SELECT id FROM users WHERE email = ?').get(input.email);
     if (existing) throw new AppError(409, 'Email already registered');
 
