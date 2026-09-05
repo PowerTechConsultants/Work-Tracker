@@ -199,8 +199,6 @@ export class LeavesService {
     const today = getISTDate();
     if (startDate < today) throw new AppError(400, 'Cannot apply for leave in the past');
     if (endDate < startDate) throw new AppError(400, 'End date must be on or after start date');
-    const overlap = await db.prepare("SELECT id FROM leaves WHERE user_id = ? AND status IN ('pending', 'approved') AND NOT (end_date < ? OR start_date > ?)").get(userId, startDate, endDate);
-    if (overlap) throw new AppError(409, 'Leave request overlaps with existing leave');
 
     const deductedFrom = this.pickDeductionType(input.type);
 
@@ -209,6 +207,9 @@ export class LeavesService {
     const leaveYear = yearOf(startDate);
 
     const leaveRecord = await (await db.transaction(async () => {
+      // Overlap check inside transaction for atomicity
+      const overlap = await db.prepare("SELECT id FROM leaves WHERE user_id = ? AND status IN ('pending', 'approved') AND NOT (end_date < ? OR start_date > ?)").get(userId, startDate, endDate);
+      if (overlap) throw new AppError(409, 'Leave request overlaps with existing leave');
       const id = uuid();
 
       let extra = 0;
@@ -377,7 +378,7 @@ export class LeavesService {
     const leave = await db.prepare('SELECT id, user_id, type, start_date, end_date, reason, status FROM leaves WHERE id = ?').get(id) as any;
     if (!leave) throw new AppError(404, 'Leave not found');
     if (leave.status !== 'pending') throw new AppError(409, 'Leave not in reviewable state');
-    if (role === 'hr' && leave.user_id === reviewedById) throw new AppError(403, 'HR cannot review their own leave request');
+    if (leave.user_id === reviewedById) throw new AppError(403, 'Cannot review your own leave request');
 
     await db.transaction(async () => {
       let extra = 0;
@@ -449,7 +450,7 @@ export class LeavesService {
       invalidateAnalyticsCache();
       await db.prepare("INSERT INTO activity_logs (id, actor_id, action, entity_type, entity_id, old_values, new_values, ip_address) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
         .run(uuid(), userId, 'cancel_leave', 'leave', id, JSON.stringify({ status: 'approved' }), JSON.stringify({ status: 'cancelled' }), null);
-      return mapLeave(await db.prepare('SELECT id, user_id, type, start_date, end_date, reason, status, review_comment, reviewed_by_id, reviewed_at, deducted_from, created_at, updated_at FROM leaves WHERE id = ?').get(id));
+      return mapLeave(await db.prepare('SELECT l.id, l.user_id, l.type, l.start_date, l.end_date, l.reason, l.status, l.review_comment, l.reviewed_by_id, l.reviewed_at, l.deducted_from, l.extra, l.leave_year, l.created_at, l.updated_at, u.first_name, u.last_name, u.employee_id FROM leaves l JOIN users u ON l.user_id = u.id WHERE l.id = ?').get(id));
     })();
   }
 }

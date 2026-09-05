@@ -72,6 +72,7 @@ export class AuthService {
 
     // Reset rate limiters on success
     await emailLimiter.reset(emailKey);
+    await ipLimiter.reset(ipKey);
 
     return AuthService.issueSession(user, userAgent, ip);
   }

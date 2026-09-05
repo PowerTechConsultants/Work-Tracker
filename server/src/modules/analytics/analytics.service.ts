@@ -157,7 +157,8 @@ export class AnalyticsService {
     for (const m of months) monthlyMap.set(m, {});
 
     for (const r of rows) {
-      const entry = monthlyMap.get(r.month);
+      const monthKey = String(r.month).padStart(2, '0');
+      const entry = monthlyMap.get(monthKey);
       if (entry) entry[r.dept_name ?? 'Unassigned'] = (entry[r.dept_name ?? 'Unassigned'] ?? 0) + r.total_overtime;
     }
 
