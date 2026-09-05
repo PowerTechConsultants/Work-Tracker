@@ -9,14 +9,14 @@ const router = Router();
 
 router.use(authenticate);
 
-router.get('/', validate(listTemplatesSchema, 'query'), async (req: Request, res: Response, next) => {
+router.get('/', requireRole('director', 'hr'), validate(listTemplatesSchema, 'query'), async (req: Request, res: Response, next) => {
   try {
     const result = await ReportTemplatesService.list(req.query as any);
     res.json(result);
   } catch (err) { next(err); }
 });
 
-router.get('/:id', async (req: Request, res: Response, next) => {
+router.get('/:id', requireRole('director', 'hr'), async (req: Request, res: Response, next) => {
   try {
     const template = await ReportTemplatesService.getById(req.params.id!);
     res.json(template);

@@ -129,7 +129,7 @@ export class ScheduledReportsService {
       const filePath = `/reports/${resultId}.${schedule.format}`;
 
       await db.prepare(
-        `UPDATE scheduled_report_results SET status = 'completed', file_path = ?, error_message = ?, created_at = datetime('now') WHERE id = ?`
+        `UPDATE scheduled_report_results SET status = 'completed', file_path = ?, result_data = ?, created_at = datetime('now') WHERE id = ?`
       ).run(filePath, JSON.stringify(reportData), resultId);
 
       await db.prepare(

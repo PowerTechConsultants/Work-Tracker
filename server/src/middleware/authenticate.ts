@@ -29,7 +29,9 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
         return;
       }
     } catch (err) {
-      console.error('[AUTH] Token revocation check failed, allowing request:', err);
+      console.error('[AUTH] Token revocation check failed, rejecting request:', err);
+      res.status(503).json({ error: 'Service temporarily unavailable' });
+      return;
     }
 
     const now = Date.now();

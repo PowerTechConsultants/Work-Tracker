@@ -9,14 +9,14 @@ const router = Router();
 
 router.use(authenticate);
 
-router.get('/', validate(listSchedulesSchema, 'query'), async (req: Request, res: Response, next) => {
+router.get('/', requireRole('director', 'hr'), validate(listSchedulesSchema, 'query'), async (req: Request, res: Response, next) => {
   try {
     const result = await ScheduledReportsService.list(req.query as any);
     res.json(result);
   } catch (err) { next(err); }
 });
 
-router.get('/:id', async (req: Request, res: Response, next) => {
+router.get('/:id', requireRole('director', 'hr'), async (req: Request, res: Response, next) => {
   try {
     const schedule = await ScheduledReportsService.getById(req.params.id!);
     res.json(schedule);

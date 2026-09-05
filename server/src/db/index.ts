@@ -525,6 +525,13 @@ const migrations: Array<{ version: number; name: string; up: () => Promise<void>
       await db.exec('CREATE INDEX IF NOT EXISTS idx_task_assignments_user ON task_assignments(user_id)');
     },
   },
+  {
+    version: 15,
+    name: 'scheduled-report-results-result-data',
+    up: async () => {
+      await addColumnIfMissing('scheduled_report_results', 'result_data', "result_data TEXT");
+    },
+  },
 ];
 
 await db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
