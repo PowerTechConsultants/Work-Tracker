@@ -3,9 +3,15 @@ import { AppError } from '../lib/app-error';
 
 const SAFE_MESSAGES: Record<string, string> = {
   'UNIQUE constraint failed: users.email': 'A user with this email already exists',
+  'Duplicate entry': 'A record with this value already exists',
+  'ER_DUP_ENTRY': 'A record with this value already exists',
   'UNIQUE constraint failed: users.employee_id': 'Employee ID already exists',
+  'UNIQUE constraint failed: attendance': 'Already checked in for this date',
   'FOREIGN KEY constraint failed': 'Referenced record not found',
+  'Cannot add or update a child row': 'Referenced record not found',
+  'ER_NO_REFERENCED_ROW': 'Referenced record not found',
   'NOT NULL constraint failed': 'Required field is missing',
+  'Column.*cannot be null': 'Required field is missing',
   'CHECK constraint failed': 'Invalid data provided',
 };
 
@@ -15,6 +21,10 @@ export function errorHandler(err: Error, req: Request, res: Response, _next: Nex
     status = 503;
   } else if (err instanceof AppError) {
     status = err.statusCode;
+  } else if (err.message.includes('Duplicate entry') || err.message.includes('UNIQUE constraint failed')) {
+    status = 409;
+  } else if (err.message.includes('Cannot add or update a child row')) {
+    status = 400;
   } else {
     status = 500;
   }
@@ -34,7 +44,7 @@ export function errorHandler(err: Error, req: Request, res: Response, _next: Nex
   } else if (err instanceof AppError) {
     message = err.message;
   } else {
-    const safeKey = Object.keys(SAFE_MESSAGES).find((k) => err.message.includes(k));
+    const safeKey = Object.keys(SAFE_MESSAGES).find((k) => new RegExp(k).test(err.message));
     message = (safeKey && SAFE_MESSAGES[safeKey]) || 'An error occurred';
   }
 

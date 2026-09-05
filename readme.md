@@ -52,7 +52,7 @@ employee-work-tracker/
 │   │   ├── middleware/           # Auth, RBAC, validation, compression, caching
 │   │   ├── lib/                  # Config, JWT, time utils, auto-absent, socket, backup
 │   │   ├── db/                   # SQLite connection, schema, migrations, seed
-│   │   ├── modules/              # 14 feature modules (auth, attendance, tasks, etc.)
+│   │   ├── modules/              # 15 feature modules (auth, attendance, tasks, etc.)
 │   │   └── types/                # TypeScript type definitions
 │   ├── tests/                    # Vitest test suite
 │   ├── load-tests/               # Artillery load tests
@@ -82,6 +82,8 @@ employee-work-tracker/
 | **Work Plans** | Daily planning with submission and manager review workflow |
 | **Work Reports** | End-of-day reports with feedback and blockers tracking |
 | **Leaves** | Application, approval, cancellation, balance tracking, working-day calculation |
+| **Documents** | Employee requests for appointment letters, experience/internship/leaving certificates and salary slips; HR/Admin fill a boilerplate template and issue; auto-generated PDF/Word download with notifications |
+| **Employee Database** | Admin/HR-only employee-wise master record: full profile data plus every official letter issued to each employee, with in-page issue workflow and PDF/Word downloads |
 | **Departments** | CRUD with manager assignment, employee count |
 | **Teams** | Team management with member add/remove, leader designation |
 | **Users** | Full CRUD with role-based access, employee ID generation |

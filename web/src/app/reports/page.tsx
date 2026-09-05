@@ -6,17 +6,20 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, getApiError } from '@/lib/api';
 import { formatDate, statusColor } from '@/lib/utils';
 import { useState } from 'react';
-import { Plus, Loader2, Trash2, Download } from 'lucide-react';
+import { Plus, Loader2, Trash2, Download, FileText, CalendarClock } from 'lucide-react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { exportToCSV, exportToExcel, exportToPDF } from '@/lib/utils';
 import Modal from '@/components/Modal';
 
 export default function ReportsPage() {
   const { user, loading } = useAuth();
   const qc = useQueryClient();
+  const pathname = usePathname();
   const isAdmin = user?.role === 'director' || user?.role === 'hr';
   const [showCreate, setShowCreate] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
-  const [form, setForm] = useState({ workCompletedToday: '', currentProgress: 0, pendingWork: '', blockers: '', tomorrowPlan: '', date: new Date().toISOString().split('T')[0] });
+  const [form, setForm] = useState({ workCompletedToday: '', currentProgress: '' as unknown as number, pendingWork: '', blockers: '', tomorrowPlan: '', date: new Date().toISOString().split('T')[0] });
   const [error, setError] = useState('');
 
   const { data: slotData } = useQuery({
@@ -42,8 +45,8 @@ export default function ReportsPage() {
   });
 
   const createReport = useMutation({
-    mutationFn: async (d: typeof form) => (await api.post('/reports', { workCompletedToday: d.workCompletedToday, currentProgress: d.currentProgress, pendingWork: d.pendingWork || undefined, blockers: d.blockers || undefined, tomorrowPlan: d.tomorrowPlan || undefined, date: new Date(d.date).toISOString() })).data,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['reports'] }); setShowCreate(false); setForm({ workCompletedToday: '', currentProgress: 0, pendingWork: '', blockers: '', tomorrowPlan: '', date: new Date().toISOString().split('T')[0] }); },
+    mutationFn: async (d: typeof form) => (await api.post('/reports', { workCompletedToday: d.workCompletedToday, currentProgress: Number(d.currentProgress) || 0, pendingWork: d.pendingWork || undefined, blockers: d.blockers || undefined, tomorrowPlan: d.tomorrowPlan || undefined, date: d.date })).data,
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['reports'] }); setShowCreate(false); setForm({ workCompletedToday: '', currentProgress: '' as unknown as number, pendingWork: '', blockers: '', tomorrowPlan: '', date: new Date().toISOString().split('T')[0] }); },
     onError: (e) => setError(getApiError(e, 'Failed')),
   });
 
@@ -109,6 +112,19 @@ export default function ReportsPage() {
             Failed to load reports. Refresh to try again.
           </div>
         )}
+
+        <div className="flex items-center gap-1 bg-slate-800/50 rounded-xl p-1 w-fit border border-slate-700">
+          <Link href="/reports" className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${pathname === '/reports' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}>
+            <FileText className="h-4 w-4" />Reports
+          </Link>
+          <Link href="/reports/templates" className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${pathname === '/reports/templates' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}>
+            <FileText className="h-4 w-4" />Templates
+          </Link>
+          <Link href="/reports/scheduled" className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${pathname === '/reports/scheduled' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}>
+            <CalendarClock className="h-4 w-4" />Scheduled
+          </Link>
+        </div>
+
         <div className="flex items-center justify-between flex-wrap gap-3">
           <h1 className="text-2xl font-bold text-white">Work Progress Report</h1>
           <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white px-4 py-2.5 text-sm font-semibold transition"><Plus className="h-4 w-4" />New Report</button>
@@ -136,23 +152,23 @@ export default function ReportsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {slotData.slots.map((slot: any) => (
               <div
-                key={slot.employee_id}
-                onClick={() => setSelectedEmployee(slot.employee_id)}
+                key={slot.employeeId ?? slot.employee_id}
+                onClick={() => setSelectedEmployee(slot.employeeId ?? slot.employee_id)}
                 className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 hover:bg-slate-800 cursor-pointer transition"
               >
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-semibold text-white">{slot.employee_name}</h3>
+                  <h3 className="text-sm font-semibold text-white">{(slot.employee_name || `${slot.firstName ?? slot.first_name ?? ''} ${slot.lastName ?? slot.last_name ?? ''}`.trim() || slot.employeeId || slot.employee_id) as string}</h3>
                   <div className="flex items-center gap-1">
-                    <button onClick={(e) => { e.stopPropagation(); handleExportEmployee(slot.employee_id, 'csv'); }} className="text-slate-500 hover:text-slate-300 transition p-1 rounded" title="CSV"><span className="text-[10px] font-mono">CSV</span></button>
-                    <button onClick={(e) => { e.stopPropagation(); handleExportEmployee(slot.employee_id, 'xlsx'); }} className="text-slate-500 hover:text-emerald-400 transition p-1 rounded" title="Excel"><Download className="h-3.5 w-3.5" /></button>
-                    <button onClick={(e) => { e.stopPropagation(); handleExportEmployee(slot.employee_id, 'pdf'); }} className="text-slate-500 hover:text-rose-400 transition p-1 rounded" title="PDF"><span className="text-[10px] font-mono">PDF</span></button>
+                    <button onClick={(e) => { e.stopPropagation(); handleExportEmployee(slot.employeeId ?? slot.employee_id, 'csv'); }} className="text-slate-500 hover:text-slate-300 transition p-1 rounded" title="CSV"><span className="text-[10px] font-mono">CSV</span></button>
+                    <button onClick={(e) => { e.stopPropagation(); handleExportEmployee(slot.employeeId ?? slot.employee_id, 'xlsx'); }} className="text-slate-500 hover:text-emerald-400 transition p-1 rounded" title="Excel"><Download className="h-3.5 w-3.5" /></button>
+                    <button onClick={(e) => { e.stopPropagation(); handleExportEmployee(slot.employeeId ?? slot.employee_id, 'pdf'); }} className="text-slate-500 hover:text-rose-400 transition p-1 rounded" title="PDF"><span className="text-[10px] font-mono">PDF</span></button>
                   </div>
                 </div>
-                <p className="text-xs text-slate-500 mb-2">ID: {slot.employee_id}</p>
+                <p className="text-xs text-slate-500 mb-2">ID: {slot.employeeId ?? slot.employee_id}</p>
                 <div className="space-y-1 text-xs text-slate-400">
                   <div className="flex justify-between">
                     <span>Reports</span>
-                    <span className="text-white">{slot.total_reports}</span>
+                    <span className="text-white">{slot.totalReports ?? slot.total_reports ?? 0}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Latest</span>
@@ -167,10 +183,10 @@ export default function ReportsPage() {
                   <div className="mt-2">
                     <div className="flex justify-between text-[10px] text-slate-500 mb-0.5">
                       <span>Avg Progress (30d)</span>
-                      <span>{Math.round(slot.avg_progress || 0)}%</span>
+                      <span>{Math.round(slot.avgProgress30d ?? slot.avg_progress ?? 0)}%</span>
                     </div>
                     <div className="w-full h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                      <div className="h-full bg-violet-500 rounded-full transition-all" style={{ width: `${slot.avg_progress || 0}%` }} />
+                      <div className="h-full bg-violet-500 rounded-full transition-all" style={{ width: `${slot.avgProgress30d ?? slot.avg_progress ?? 0}%` }} />
                     </div>
                   </div>
                 </div>
@@ -228,7 +244,14 @@ export default function ReportsPage() {
           <div className="space-y-4">
             <div><label className="block text-sm text-slate-300 mb-1">Date</label><input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-white" /></div>
             <div><label className="block text-sm text-slate-300 mb-1">Work Completed *</label><textarea value={form.workCompletedToday} onChange={(e) => setForm({ ...form, workCompletedToday: e.target.value })} rows={3} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-white" /></div>
-            <div><label className="block text-sm text-slate-300 mb-1">Progress %</label><input type="number" min={0} max={100} value={form.currentProgress} onChange={(e) => setForm({ ...form, currentProgress: Number(e.target.value) })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-white" /></div>
+            <div><label className="block text-sm text-slate-300 mb-1">Progress %</label><input type="number" min={0} max={100} placeholder="0 - 100" value={form.currentProgress} onChange={(e) => {
+              const v = e.target.value;
+              if (v === '') setForm({ ...form, currentProgress: '' as unknown as number });
+              else {
+                const n = Number(v);
+                if (!isNaN(n)) setForm({ ...form, currentProgress: Math.min(100, Math.max(0, n)) as unknown as number });
+              }
+            }} onFocus={(e) => e.target.select()} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></div>
             <div><label className="block text-sm text-slate-300 mb-1">Pending Work</label><textarea value={form.pendingWork} onChange={(e) => setForm({ ...form, pendingWork: e.target.value })} rows={2} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-white" /></div>
             <div><label className="block text-sm text-slate-300 mb-1">Blockers</label><textarea value={form.blockers} onChange={(e) => setForm({ ...form, blockers: e.target.value })} rows={2} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-white" /></div>
             <div><label className="block text-sm text-slate-300 mb-1">Tomorrow Plan</label><textarea value={form.tomorrowPlan} onChange={(e) => setForm({ ...form, tomorrowPlan: e.target.value })} rows={2} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-white" /></div>

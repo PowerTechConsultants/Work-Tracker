@@ -37,7 +37,7 @@ router.post('/', requireRole('director'), validate(createUserSchema), async (req
   try {
     const user = await UsersService.create(req.body);
     cache.delByPrefix('/api/v1/users');
-    try { ActivityLogsService.create(req.user!.sub, 'create', 'user', user.id, { email: req.body.email, role: req.body.role }, req.ip); } catch {}
+    try { await ActivityLogsService.create(req.user!.sub, 'create', 'user', user.id, { email: req.body.email, role: req.body.role }, req.ip); } catch {}
     res.status(201).json(user);
   } catch (err) { next(err); }
 });
@@ -46,7 +46,7 @@ router.patch('/:id', requireRole('director'), validate(updateUserSchema), async 
   try {
     const user = await UsersService.update(req.params.id!, req.body);
     cache.delByPrefix('/api/v1/users');
-    try { ActivityLogsService.create(req.user!.sub, 'update', 'user', req.params.id, { changes: Object.keys(req.body) }, req.ip); } catch {}
+    try { await ActivityLogsService.create(req.user!.sub, 'update', 'user', req.params.id, { changes: Object.keys(req.body) }, req.ip); } catch {}
     res.json(user);
   } catch (err) { next(err); }
 });
@@ -55,7 +55,7 @@ router.delete('/:id', requireRole('director'), validate(deleteUserSchema), async
   try {
     const result = await UsersService.delete(req.params.id!, req.body);
     cache.delByPrefix('/api/v1/users');
-    try { ActivityLogsService.create(req.user!.sub, 'delete', 'user', req.params.id, undefined, req.ip); } catch {}
+    try { await ActivityLogsService.create(req.user!.sub, 'delete', 'user', req.params.id, undefined, req.ip); } catch {}
     res.json(result);
   } catch (err) { next(err); }
 });

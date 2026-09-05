@@ -1,12 +1,5 @@
 import db from '../db';
 
-const getStmt = db.prepare("SELECT data FROM api_cache WHERE cache_key = ? AND expires_at > datetime('now')");
-const setStmt = db.prepare("INSERT OR REPLACE INTO api_cache (cache_key, data, expires_at) VALUES (?, ?, datetime('now', ?))");
-const delStmt = db.prepare('DELETE FROM api_cache WHERE cache_key = ?');
-const delPrefixStmt = db.prepare('DELETE FROM api_cache WHERE cache_key LIKE ?');
-const flushStmt = db.prepare('DELETE FROM api_cache');
-const sizeStmt = db.prepare('SELECT COUNT(*) as c FROM api_cache');
-
 interface CacheEntry {
   data: any;
   expiresAt: number;
@@ -39,16 +32,16 @@ function l1Del(key: string): void {
 
 function l1DelByPrefix(prefix: string): void {
   for (const key of l1Cache.keys()) {
-    if (key.includes(prefix)) l1Cache.delete(key);
+    if (key.startsWith(prefix)) l1Cache.delete(key);
   }
 }
 
 export const cache = {
-  get(key: string): any | undefined {
+  async get(key: string): Promise<any | undefined> {
     const l1 = l1Get(key);
     if (l1 !== undefined) return l1;
 
-    const row = getStmt.get(key) as any;
+    const row = await db.prepare("SELECT data FROM api_cache WHERE cache_key = ? AND expires_at > NOW()").get(key) as any;
     if (!row) return undefined;
     try {
       const data = JSON.parse(row.data);
@@ -59,29 +52,30 @@ export const cache = {
     }
   },
 
-  set(key: string, data: any, ttlMs: number): void {
+  async set(key: string, data: any, ttlMs: number): Promise<void> {
     l1Set(key, data, ttlMs);
     const sec = Math.ceil(ttlMs / 1000);
-    setStmt.run(key, JSON.stringify(data), `+${sec} seconds`);
+    await db.prepare("REPLACE INTO api_cache (cache_key, data, expires_at) VALUES (?, ?, NOW() + INTERVAL ? SECOND)").run(key, JSON.stringify(data), sec);
   },
 
-  del(key: string): void {
+  async del(key: string): Promise<void> {
     l1Del(key);
-    delStmt.run(key);
+    await db.prepare('DELETE FROM api_cache WHERE cache_key = ?').run(key);
   },
 
-  delByPrefix(prefix: string): void {
+  async delByPrefix(prefix: string): Promise<void> {
     l1DelByPrefix(prefix);
-    delPrefixStmt.run(`%${prefix}%`);
+    const escaped = prefix.replace(/[%_]/g, '\\$&');
+    await db.prepare('DELETE FROM api_cache WHERE cache_key LIKE ? ESCAPE "\\"').run(`${escaped}%`);
   },
 
-  flush(): void {
+  async flush(): Promise<void> {
     l1Cache.clear();
-    flushStmt.run();
+    await db.prepare('DELETE FROM api_cache').run();
   },
 
-  get size(): number {
-    const row = sizeStmt.get() as any;
+  async size(): Promise<number> {
+    const row = await db.prepare('SELECT COUNT(*) as c FROM api_cache').get() as any;
     return row?.c ?? 0;
   },
 };

@@ -16,17 +16,19 @@ export interface RefreshTokenPayload {
 
 export function signAccessToken(userId: string, email: string, role: string): string {
   const payload: AccessTokenPayload = { sub: userId, email, role };
-  const opts: SignOptions = { expiresIn: config.jwtAccessTtl as any };
+  const opts: SignOptions = { expiresIn: config.jwtAccessTtl as SignOptions['expiresIn'] };
   return jwt.sign(payload, config.jwtAccessSecret, opts);
 }
 
 export function verifyAccessToken(token: string): AccessTokenPayload {
-  return jwt.verify(token, config.jwtAccessSecret, { algorithms: ['HS256'] }) as AccessTokenPayload;
+  const payload = jwt.verify(token, config.jwtAccessSecret, { algorithms: ['HS256'] }) as AccessTokenPayload & { step?: string };
+  if ((payload as any).step === '2fa') throw new Error('Invalid token type');
+  return payload as AccessTokenPayload;
 }
 
 export function signRefreshToken(userId: string, tokenId: string): string {
   const payload: RefreshTokenPayload = { sub: userId, tokenId };
-  const opts: SignOptions = { expiresIn: `${config.jwtRefreshTtlDays}d` as any };
+  const opts: SignOptions = { expiresIn: `${config.jwtRefreshTtlDays}d` as SignOptions['expiresIn'] };
   return jwt.sign(payload, config.jwtRefreshSecret, opts);
 }
 
@@ -44,7 +46,7 @@ export interface PendingAuthPayload {
 
 export function signPendingAuthToken(userId: string, email: string): string {
   const payload: PendingAuthPayload = { sub: userId, email, step: '2fa' };
-  const opts: SignOptions = { expiresIn: '5m' as any };
+  const opts: SignOptions = { expiresIn: '5m' as SignOptions['expiresIn'] };
   return jwt.sign(payload, config.jwtAccessSecret, opts);
 }
 

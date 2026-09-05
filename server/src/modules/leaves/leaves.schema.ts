@@ -1,10 +1,10 @@
 import { z } from 'zod';
 
 export const createLeaveSchema = z.object({
-  type: z.enum(['casual', 'sick', 'paid']),
-  startDate: z.string().datetime('Invalid start date format'),
-  endDate: z.string().datetime('Invalid end date format'),
-  reason: z.string().min(1, 'Reason is required').max(2000, 'Reason too long').optional(),
+  type: z.enum(['casual', 'sick', 'proposal']),
+  startDate: z.string().trim().datetime('Invalid start date format'),
+  endDate: z.string().trim().datetime('Invalid end date format'),
+  reason: z.string().trim().min(1, 'Reason is required').max(2000, 'Reason too long').optional(),
 }).refine((data) => {
   const start = new Date(data.startDate);
   const end = new Date(data.endDate);
@@ -20,17 +20,17 @@ export const createLeaveSchema = z.object({
 export const listLeavesSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
-  userId: z.string().min(1).optional(),
+  userId: z.string().trim().min(1).optional(),
   status: z.enum(['pending', 'approved', 'rejected', 'cancelled']).optional(),
   statuses: z.array(z.enum(['pending', 'approved', 'rejected', 'cancelled'])).optional(),
-  type: z.enum(['casual', 'sick', 'paid']).optional(),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
+  type: z.enum(['casual', 'sick', 'proposal']).optional(),
+  startDate: z.string().trim().optional(),
+  endDate: z.string().trim().optional(),
 });
 
 export const reviewLeaveSchema = z.object({
   status: z.enum(['approved', 'rejected']),
-  reviewComment: z.string().optional(),
+  reviewComment: z.string().trim().optional(),
 });
 
 export type CreateLeaveInput = z.infer<typeof createLeaveSchema>;

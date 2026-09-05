@@ -17,11 +17,7 @@ const isJwtExpired = (token: string) => {
 export const initializeSocket = (token: string) => {
   const API_URL =
     process.env.NEXT_PUBLIC_API_URL ||
-    (typeof window !== 'undefined'
-      ? window.location.hostname === 'localhost'
-        ? 'http://localhost:4000'
-        : window.location.origin
-      : 'http://localhost:4000');
+    (typeof window !== 'undefined' ? `http://${window.location.hostname}:4000` : 'http://localhost:4000');
 
   if (socket && (currentToken !== token || socketUrl !== API_URL)) {
     socket.close();
@@ -42,11 +38,9 @@ export const initializeSocket = (token: string) => {
     });
 
     socket.on('connect', () => {
-      console.log('[Socket] Connected');
     });
 
     socket.on('disconnect', () => {
-      console.log('[Socket] Disconnected');
     });
 
     socket.on('connect_error', (error) => {
@@ -95,8 +89,14 @@ export const disconnectSocket = () => {
 export { socket };
 
 export const joinUserRoom = (userId: string) => {
-  const s = getSocketSafe();
-  if (s?.connected) s.emit('join-user', userId);
+  const tryJoin = () => {
+    const s = getSocketSafe();
+    if (s?.connected) { s.emit('join-user', userId); return true; }
+    return false;
+  };
+  if (tryJoin()) return;
+  const timer = setInterval(() => { if (tryJoin() && timer) clearInterval(timer); }, 500);
+  setTimeout(() => { clearInterval(timer); }, 10000);
 };
 
 export const joinTeamRoom = (teamName: string) => {

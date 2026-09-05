@@ -4,64 +4,64 @@ const attendanceStatuses = ['present', 'on_break', 'work_end', 'absent', 'leave'
 
 export const checkInSchema = z.object({
   status: z.enum(attendanceStatuses).default('present'),
-  notes: z.string().optional(),
+  notes: z.string().trim().optional(),
   latitude: z.number().min(-90).max(90).optional(),
   longitude: z.number().min(-180).max(180).optional(),
   accuracy: z.number().min(0).optional(),
-  locationCapturedAt: z.string().datetime().optional(),
+  locationCapturedAt: z.string().trim().datetime().optional(),
 });
 
 export const locationOptionalSchema = z.object({
   latitude: z.number().min(-90).max(90).optional(),
   longitude: z.number().min(-180).max(180).optional(),
   accuracy: z.number().min(0).optional(),
-  locationCapturedAt: z.string().datetime().optional(),
+  locationCapturedAt: z.string().trim().datetime().optional(),
 });
 
 export const monthlyQuerySchema = z.object({
   year: z.coerce.number().int().min(2020).max(2100).default(new Date().getFullYear()),
   month: z.coerce.number().int().min(1).max(12).default(new Date().getMonth() + 1),
-  userId: z.string().optional(),
+  userId: z.string().trim().optional(),
 });
 
 export const listAttendanceSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
-  userId: z.string().min(1).optional(),
+  userId: z.string().trim().min(1).optional(),
   userIds: z.preprocess(
     (val) => (val === undefined || val === null ? val : Array.isArray(val) ? val : [val]),
-    z.array(z.string().min(1)).optional()
+    z.array(z.string().trim().min(1)).optional()
   ),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
+  startDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD format').optional(),
+  endDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD format').optional(),
   status: z.enum(attendanceStatuses).optional(),
 });
 
 export const updateAttendanceSchema = z.object({
   status: z.enum(attendanceStatuses).optional(),
-  loginTime: z.string().datetime().optional(),
-  logoutTime: z.string().datetime().optional(),
+  loginTime: z.string().trim().datetime().optional(),
+  logoutTime: z.string().trim().datetime().optional(),
   workingHours: z.number().min(0).optional(),
   overtimeHours: z.number().min(0).optional(),
-  pauseStartTime: z.string().datetime().optional(),
-  pauseEndTime: z.string().datetime().optional(),
+  pauseStartTime: z.string().trim().datetime().optional(),
+  pauseEndTime: z.string().trim().datetime().optional(),
   pauseMinutes: z.number().min(0).optional(),
-  notes: z.string().optional(),
+  notes: z.string().trim().optional(),
   latitude: z.number().min(-90).max(90).optional(),
   longitude: z.number().min(-180).max(180).optional(),
   accuracy: z.number().min(0).optional(),
-  locationCapturedAt: z.string().datetime().optional(),
+  locationCapturedAt: z.string().trim().datetime().optional(),
 });
 
 export const deleteAttendanceSchema = z.object({
-  userId: z.string().min(1).optional(),
+  userId: z.string().trim().min(1).optional(),
   userIds: z.preprocess(
     (val) => (val === undefined || val === null ? val : Array.isArray(val) ? val : [val]),
-    z.array(z.string().min(1)).optional()
+    z.array(z.string().trim().min(1)).optional()
   ),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
-  date: z.string().optional(),
+  startDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD format').optional(),
+  endDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD format').optional(),
+  date: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD format').optional(),
   status: z.enum(attendanceStatuses).optional(),
   statuses: z.preprocess(
     (val) => (val === undefined || val === null ? val : Array.isArray(val) ? val : [val]),

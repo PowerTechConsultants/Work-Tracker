@@ -3,7 +3,7 @@ import { validate } from '../../middleware/validate';
 import { authenticate } from '../../middleware/authenticate';
 import { requireRole } from '../../middleware/rbac';
 import rateLimit from 'express-rate-limit';
-import { SQLiteStore } from '../../lib/rate-limit-store';
+import { RateLimitStore } from '../../lib/rate-limit-store';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 import { loginSchema, registerSchema, changePasswordSchema, forgotPasswordSchema, resetPasswordSchema, twoFactorVerifySchema, twoFactorDisableSchema } from './auth.schema';
 import { AuthService } from './auth.service';
@@ -12,12 +12,22 @@ import { createTOTPSecret, buildTOTPUri } from '../../lib/totp';
 
 const router = Router();
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 const COOKIE_OPTS = {
   httpOnly: true,
-  sameSite: 'lax' as const,
-  secure: config.cookieSecure,
+  sameSite: 'strict' as const,
+  secure: isProduction,
   path: '/api/v1/auth',
   maxAge: 30 * 24 * 60 * 60 * 1000,
+};
+
+const ACCESS_COOKIE_OPTS = {
+  httpOnly: true,
+  sameSite: 'strict' as const,
+  secure: isProduction,
+  path: '/',
+  maxAge: 15 * 60 * 1000,
 };
 
 const loginLimiter = rateLimit({
@@ -28,26 +38,27 @@ const loginLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many login attempts for this account. Try again later.' },
-  store: new SQLiteStore('login'),
+  store: new RateLimitStore('login'),
 });
 
 router.post('/login', loginLimiter, validate(loginSchema), async (req: Request, res: Response, next) => {
   try {
     const result = await AuthService.login(req.body, req.headers['user-agent'], req.ip);
     if ('twoFactorRequired' in result) {
-      try { ActivityLogsService.create(result.user.id, 'login_2fa_pending', 'auth', result.user.id, { email: req.body.email }, req.ip); } catch {}
+      try { await ActivityLogsService.create(result.user.id, 'login_2fa_pending', 'auth', result.user.id, { email: req.body.email }, req.ip); } catch {}
       return res.json({ twoFactorRequired: true, pendingAuthToken: result.pendingAuthToken, user: result.user });
     }
-    try { ActivityLogsService.create(result.user.id, 'login', 'auth', result.user.id, { email: req.body.email }, req.ip); } catch {}
+    try { await ActivityLogsService.create(result.user.id, 'login', 'auth', result.user.id, { email: req.body.email }, req.ip); } catch {}
+    res.cookie('accessToken', result.accessToken, ACCESS_COOKIE_OPTS);
     res.cookie('refreshToken', result.refreshToken, COOKIE_OPTS);
-    res.json({ user: result.user, accessToken: result.accessToken });
+    res.json({ user: result.user, accessToken: result.accessToken, passwordExpired: result.passwordExpired });
   } catch (err) { next(err); }
 });
 
 router.post('/register', authenticate, requireRole('director'), validate(registerSchema), async (req: Request, res: Response, next) => {
   try {
     const user = await AuthService.register(req.body);
-    try { ActivityLogsService.create(req.user!.sub, 'register', 'auth', user.id, { email: req.body.email, role: req.body.role }, req.ip); } catch {}
+    try { await ActivityLogsService.create(req.user!.sub, 'register', 'auth', user.id, { email: req.body.email, role: req.body.role }, req.ip); } catch {}
     res.status(201).json(user);
   } catch (err) { next(err); }
 });
@@ -57,10 +68,12 @@ router.post('/refresh', async (req: Request, res: Response, next) => {
     const refreshToken = req.cookies?.refreshToken;
     if (!refreshToken) return res.status(400).json({ error: 'Refresh token is required' });
     const result = await AuthService.refreshToken(refreshToken);
+    res.cookie('accessToken', result.accessToken, ACCESS_COOKIE_OPTS);
     res.cookie('refreshToken', result.refreshToken, COOKIE_OPTS);
     res.json({ accessToken: result.accessToken });
   } catch (err) {
-    res.clearCookie('refreshToken', { path: '/api/v1/auth' });
+    res.clearCookie('refreshToken', { path: '/api/v1/auth', httpOnly: true, sameSite: 'strict', secure: isProduction });
+    res.clearCookie('accessToken', { path: '/', httpOnly: true, sameSite: 'strict', secure: isProduction });
     next(err);
   }
 });
@@ -69,7 +82,8 @@ router.post('/logout', async (req: Request, res: Response, next) => {
   try {
     const refreshToken = req.cookies?.refreshToken;
     if (refreshToken) await AuthService.logout(refreshToken);
-    res.clearCookie('refreshToken', { path: '/api/v1/auth' });
+    res.clearCookie('refreshToken', { path: '/api/v1/auth', httpOnly: true, sameSite: 'strict', secure: isProduction });
+    res.clearCookie('accessToken', { path: '/', httpOnly: true, sameSite: 'strict', secure: isProduction });
     res.json({ message: 'Logged out' });
   } catch (err) { next(err); }
 });
@@ -77,10 +91,11 @@ router.post('/logout', async (req: Request, res: Response, next) => {
 router.post('/change-password', authenticate, validate(changePasswordSchema), async (req: Request, res: Response, next) => {
   try {
     await AuthService.changePassword(req.user!.sub, req.body);
-    try { ActivityLogsService.create(req.user!.sub, 'change_password', 'auth', req.user!.sub, undefined, req.ip); } catch {}
+    try { await ActivityLogsService.create(req.user!.sub, 'change_password', 'auth', req.user!.sub, undefined, req.ip); } catch {}
     const rt = req.cookies?.refreshToken;
     if (rt) await AuthService.logout(rt);
-    res.clearCookie('refreshToken', { path: '/api/v1/auth' });
+    res.clearCookie('refreshToken', { path: '/api/v1/auth', httpOnly: true, sameSite: 'strict', secure: isProduction });
+    res.clearCookie('accessToken', { path: '/', httpOnly: true, sameSite: 'strict', secure: isProduction });
     res.json({ message: 'Password changed' });
   } catch (err) { next(err); }
 });
@@ -106,7 +121,7 @@ router.post('/2fa/setup', authenticate, async (req: Request, res: Response, next
 router.post('/2fa/verify-enable', authenticate, validate(twoFactorVerifySchema), async (req: Request, res: Response, next) => {
   try {
     const result = await AuthService.verifyAndEnableTwoFactor(req.user!.sub, req.body);
-    try { ActivityLogsService.create(req.user!.sub, 'enable_2fa', 'auth', req.user!.sub, undefined, req.ip); } catch {}
+    try { await ActivityLogsService.create(req.user!.sub, 'enable_2fa', 'auth', req.user!.sub, undefined, req.ip); } catch {}
     res.json(result);
   } catch (err) { next(err); }
 });
@@ -115,7 +130,7 @@ router.post('/2fa/verify-enable', authenticate, validate(twoFactorVerifySchema),
 router.post('/2fa/disable', authenticate, validate(twoFactorDisableSchema), async (req: Request, res: Response, next) => {
   try {
     const result = await AuthService.disableTwoFactor(req.user!.sub, req.body.currentPassword);
-    try { ActivityLogsService.create(req.user!.sub, 'disable_2fa', 'auth', req.user!.sub, undefined, req.ip); } catch {}
+    try { await ActivityLogsService.create(req.user!.sub, 'disable_2fa', 'auth', req.user!.sub, undefined, req.ip); } catch {}
     res.json(result);
   } catch (err) { next(err); }
 });
@@ -127,13 +142,13 @@ const forgotPasswordLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many password reset requests for this email. Try again later.' },
-  store: new SQLiteStore('forgot-password'),
+  store: new RateLimitStore('forgot-password'),
 });
 
 router.post('/forgot-password', forgotPasswordLimiter, validate(forgotPasswordSchema), async (req: Request, res: Response, next) => {
   try {
     const result = await AuthService.forgotPassword(req.body.email);
-    try { ActivityLogsService.create('system', 'forgot_password', 'auth', undefined, { email: req.body.email }, req.ip); } catch {}
+    try { await ActivityLogsService.create('system', 'forgot_password', 'auth', undefined, { email: req.body.email }, req.ip); } catch {}
     res.json(result);
   } catch (err) { next(err); }
 });
@@ -144,7 +159,7 @@ const resetPasswordLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many password reset attempts. Try again later.' },
-  store: new SQLiteStore('reset-password'),
+  store: new RateLimitStore('reset-password'),
 });
 
 router.post('/reset-password', resetPasswordLimiter, validate(resetPasswordSchema), async (req: Request, res: Response, next) => {

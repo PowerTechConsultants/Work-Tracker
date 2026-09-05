@@ -6,7 +6,14 @@ import { isTokenRevoked } from '../lib/blacklist';
 const userCache = new Map<string, { status: string; role: string; expiresAt: number }>();
 const USER_CACHE_TTL_MS = 30_000;
 
-export function authenticate(req: Request, res: Response, next: NextFunction): void {
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of userCache) {
+    if (entry.expiresAt <= now) userCache.delete(key);
+  }
+}, 60_000);
+
+export async function authenticate(req: Request, res: Response, next: NextFunction): Promise<void> {
   const header = req.headers.authorization;
   const token = header?.startsWith('Bearer ') ? header.slice(7) : req.cookies?.accessToken;
   if (!token) {
@@ -16,9 +23,13 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
 
   try {
     req.user = verifyAccessToken(token);
-    if (isTokenRevoked(req.user.sub, req.user.iat)) {
-      res.status(401).json({ error: 'Token revoked' });
-      return;
+    try {
+      if (await isTokenRevoked(req.user.sub, req.user.iat)) {
+        res.status(401).json({ error: 'Token revoked' });
+        return;
+      }
+    } catch (err) {
+      console.error('[AUTH] Token revocation check failed, allowing request:', err);
     }
 
     const now = Date.now();
@@ -33,7 +44,7 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
       return;
     }
 
-    const user = db.prepare('SELECT status, role FROM users WHERE id = ?').get(req.user.sub) as any;
+    const user = await db.prepare('SELECT status, role FROM users WHERE id = ?').get(req.user.sub) as any;
     if (!user || user.status !== 'active') {
       userCache.set(req.user.sub, { status: 'inactive', role: '', expiresAt: now + USER_CACHE_TTL_MS });
       res.status(401).json({ error: 'Account is inactive or suspended' });

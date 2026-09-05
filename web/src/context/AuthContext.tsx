@@ -52,10 +52,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (PUBLIC_PATHS.includes(pathname)) { setLoading(false); return; }
     const init = async () => {
       try {
-        if (!getAccessToken() || isTokenExpired(getAccessToken()!)) {
-          const accessToken = await doRefresh();
-          if (cancelled) return;
-          setAccessToken(accessToken);
+        const token = getAccessToken();
+        if (!token || isTokenExpired(token)) {
+          try {
+            const accessToken = await doRefresh();
+            if (cancelled) return;
+            setAccessToken(accessToken);
+          } catch (e: any) {
+            // No valid refresh cookie (user not logged in) - stay unauthenticated without noise
+            if (e?.response?.status === 400) {
+              if (!cancelled) { setAccessToken(null); setUser(null); }
+              return;
+            }
+            throw e;
+          }
         }
         const me = await api.get('/auth/me');
         if (!cancelled) setUser((prev: any) => {

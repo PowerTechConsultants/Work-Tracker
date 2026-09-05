@@ -18,7 +18,7 @@ const ExportDialog = dynamic(() => import('@/components/ExportDialog'), { ssr: f
 const Calendar = dynamic(() => import('@/components/Calendar'), { ssr: false });
 const AdvancedFilter = dynamic(() => import('@/components/AdvancedFilter'), { ssr: false });
 
-const balanceOrder = ['sick', 'casual', 'paid'];
+const balanceOrder = ['sick', 'casual', 'proposal'];
 
 function countWorkingDays(start: string, end: string, excluded: Set<string>): number {
   const cur = new Date(`${start}T00:00:00Z`);
@@ -97,7 +97,7 @@ export default function LeavesPage() {
   });
   const { data: balance } = useQuery({ queryKey: ['leaveBal'], queryFn: async () => (await api.get('/leaves/balance')).data, enabled: !loading && !!user });
   const totalRemaining = (balance?.totalAvailable ?? balance?.totalBalance ?? 0) - (balance?.totalUsed ?? 0);
-  const { data: holidaysRes } = useQuery({ queryKey: ['holidays'], queryFn: async () => (await api.get('/holidays')).data, enabled: !loading && !!user });
+  const { data: holidaysRes } = useQuery({ queryKey: ['holidays'], queryFn: async () => (await api.get('/holidays', { params: { limit: 366 } })).data, enabled: !loading && !!user });
   const holidays = useMemo(() => holidaysRes?.holidays ?? [], [holidaysRes]);
   const todayIST = getTodayIST();
 
@@ -146,14 +146,14 @@ export default function LeavesPage() {
     const pools: Record<string, number> = {
       casual: balance.balances.casual?.remaining ?? 0,
       sick: balance.balances.sick?.remaining ?? 0,
-      paid: balance.balances.paid?.remaining ?? 0,
+      proposal: balance.balances.proposal?.remaining ?? 0,
     };
     const typeTotal: Record<string, number> = {
       casual: balance.balances.casual?.total ?? 8,
       sick: balance.balances.sick?.total ?? 8,
-      paid: balance.balances.paid?.total ?? 12,
+      proposal: balance.balances.proposal?.total ?? 16,
     };
-    const spillOrder = ['casual', 'sick', 'paid'];
+    const spillOrder = ['casual', 'sick', 'proposal'];
 
     const availableTotal = balance.totalAvailable ?? balance.totalBalance ?? 28;
     const availableRemaining = Math.max(0, balance.totalRemaining ?? (availableTotal - (balance.totalUsed ?? 0)));
@@ -229,9 +229,9 @@ export default function LeavesPage() {
 
   const createLeave = useMutation({
     retry: 0,
-    mutationFn: async (d: typeof form) => (await api.post('/leaves', { type: d.type, startDate: new Date(d.startDate).toISOString(), endDate: new Date(d.endDate).toISOString(), reason: d.reason || undefined })).data,
+    mutationFn: async (d: typeof form) => (await api.post('/leaves', { type: d.type, startDate: d.startDate, endDate: d.endDate, reason: d.reason || undefined })).data,
     onMutate: () => setError(''),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['leaves'] }); qc.invalidateQueries({ queryKey: ['leaveBal'] }); setShowCreate(false); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['leaves'] }); qc.invalidateQueries({ queryKey: ['leaveBal'] }); setShowCreate(false); setForm({ type: 'casual', startDate: '', endDate: '', reason: '' }); },
     onError: (e) => setError(getApiError(e, 'Leave request failed')),
   });
 
@@ -298,7 +298,7 @@ export default function LeavesPage() {
                 { id: 'type', label: 'Leave Type', type: 'select', options: [
                   { label: 'Casual', value: 'casual' },
                   { label: 'Sick', value: 'sick' },
-                  { label: 'Paid', value: 'paid' },
+                  { label: 'Proposal', value: 'proposal' },
                 ]},
                 { id: 'dateRange', label: 'Date Range', type: 'daterange' },
               ]}
@@ -368,7 +368,7 @@ export default function LeavesPage() {
         >
           {error && <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 text-sm rounded-xl px-4 py-3 mb-4">{error}</div>}
           <div className="space-y-4">
-            <div><label className="block text-sm text-slate-300 mb-1">Type</label><select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-white"><option value="casual">Casual</option><option value="sick">Sick</option><option value="paid">Paid</option></select></div>
+            <div><label className="block text-sm text-slate-300 mb-1">Type</label><select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-white"><option value="casual">Casual</option><option value="sick">Sick</option><option value="proposal">Proposal</option></select></div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div><label className="block text-sm text-slate-300 mb-1">Start *</label><input type="date" min={todayIST} value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-white" /></div>
               <div><label className="block text-sm text-slate-300 mb-1">End *</label><input type="date" min={form.startDate || todayIST} value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-white" /></div>

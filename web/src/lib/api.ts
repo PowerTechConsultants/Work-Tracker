@@ -20,11 +20,11 @@ export async function doRefresh(): Promise<string> {
   _refreshPromise = api
     .post<{ accessToken: string }>('/auth/refresh', {})
     .then((res) => {
-      _accessToken = res.data.accessToken;
+      setAccessToken(res.data.accessToken);
       return _accessToken as string;
     })
     .catch((err) => {
-      _accessToken = null;
+      setAccessToken(null);
       throw err;
     })
     .finally(() => {
@@ -54,7 +54,6 @@ api.interceptors.response.use(
   async (error) => {
     if (!error.response) {
       console.error('[API] Network error:', error.message);
-      // Don't retry network errors — let the caller handle
       return Promise.reject(error);
     }
     const orig = error.config;
@@ -76,3 +75,26 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+export const analyticsApi = {
+  productivity: (params?: any) => api.get('/analytics/productivity', { params }),
+  departmentPerformance: () => api.get('/analytics/department-performance'),
+  employeeProductivity: (params?: any) => api.get('/analytics/employee-productivity', { params }),
+  managerDashboard: (managerId: string) => api.get('/analytics/manager-dashboard', { params: { managerId } }),
+};
+
+export const reportTemplatesApi = {
+  list: (params?: any) => api.get('/report-templates', { params }),
+  create: (data: any) => api.post('/report-templates', data),
+  update: (id: string, data: any) => api.patch(`/report-templates/${id}`, data),
+  delete: (id: string) => api.delete(`/report-templates/${id}`),
+};
+
+export const scheduledReportsApi = {
+  list: (params?: any) => api.get('/scheduled-reports', { params }),
+  create: (data: any) => api.post('/scheduled-reports', data),
+  update: (id: string, data: any) => api.patch(`/scheduled-reports/${id}`, data),
+  delete: (id: string) => api.delete(`/scheduled-reports/${id}`),
+  run: (id: string) => api.post(`/scheduled-reports/${id}/run`),
+  results: (id: string) => api.get(`/scheduled-reports/${id}/results`),
+};

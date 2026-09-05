@@ -10,9 +10,9 @@ import { cleanupExpiredBlacklistEntries } from './lib/blacklist';
 import { ensureAdminBootstrap } from './db/bootstrap';
 import db from './db';
 
-ensureAdminBootstrap();
+await ensureAdminBootstrap();
 
-cleanupExpiredBlacklistEntries();
+cleanupExpiredBlacklistEntries().catch(() => {});
 
 const app = createApp();
 
@@ -27,7 +27,8 @@ if (enableHttps) {
   if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
     if (!fs.existsSync(certDir)) fs.mkdirSync(certDir, { recursive: true });
     try {
-      require('./lib/cert').generateSelfSignedCert(certDir);
+      const cert = await import('./lib/cert');
+      cert.generateSelfSignedCert(certDir);
     } catch (e) {
       console.warn('[SERVER] Failed to generate SSL certificate:', e);
       console.warn('[SERVER] Falling back to HTTP. Set ENABLE_HTTPS=false or generate certs manually in certs/');
@@ -47,12 +48,12 @@ if (enableHttps) {
 
 initializeSocket(server);
 startAutoAbsentScheduler();
-setInterval(() => {
+setInterval(async () => {
   try {
-    db.prepare("DELETE FROM token_blacklist WHERE expires_at <= datetime('now')").run();
-    db.prepare("DELETE FROM rate_limits WHERE expires_at <= datetime('now')").run();
-    db.prepare("DELETE FROM refresh_tokens WHERE expires_at <= datetime('now')").run();
-    db.prepare("DELETE FROM api_cache WHERE expires_at <= datetime('now')").run();
+    await db.prepare("DELETE FROM token_blacklist WHERE expires_at <= NOW()").run();
+    await db.prepare("DELETE FROM rate_limits WHERE expires_at <= NOW()").run();
+    await db.prepare("DELETE FROM refresh_tokens WHERE expires_at <= NOW()").run();
+    await db.prepare("DELETE FROM api_cache WHERE expires_at <= NOW()").run();
   } catch {}
 }, 60 * 60 * 1000);
 
@@ -63,30 +64,30 @@ server.listen(port, '0.0.0.0', () => {
   console.log(`[ENV] ${config.nodeEnv}`);
 });
 
-const gracefulShutdown = async (signal: string) => {
+let shuttingDown = false;
+const gracefulShutdown = async (signal: string, exitCode = 0) => {
+  if (shuttingDown) return;
+  shuttingDown = true;
   console.log(`\n[SHUTDOWN] ${signal} received. Starting graceful shutdown...`);
   closeSocket();
   console.log('[SHUTDOWN] Socket.IO server closed');
-  try {
-    if (db) {
-      try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch {}
-      db.close();
-      console.log('[SHUTDOWN] Database connection closed');
-    }
-  } catch (_error) {
-    console.error('[SHUTDOWN] Error closing database:', _error);
-  }
-  console.log('[SHUTDOWN] Graceful shutdown complete');
-  process.exit(0);
+  server.close(() => {
+    console.log('[SHUTDOWN] HTTP server closed');
+    process.exit(exitCode);
+  });
+  setTimeout(() => {
+    console.log('[SHUTDOWN] Forced exit after timeout');
+    process.exit(exitCode);
+  }, 10000);
 };
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 process.on('uncaughtException', (error) => {
   console.error('[ERROR] Uncaught Exception:', error);
-  gracefulShutdown('UNCAUGHT_EXCEPTION');
+  gracefulShutdown('UNCAUGHT_EXCEPTION', 1);
 });
 process.on('unhandledRejection', (reason, promise) => {
   console.error('[ERROR] Unhandled Rejection at:', promise, 'reason:', reason);
-  gracefulShutdown('UNHANDLED_REJECTION');
+  gracefulShutdown('UNHANDLED_REJECTION', 1);
 });

@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { validate } from '../../middleware/validate';
 import { authenticate } from '../../middleware/authenticate';
 import { requireRole } from '../../middleware/rbac';
+import { apiCache } from '../../middleware/api-cache';
 import { createPlanSchema, updatePlanSchema, listPlansSchema, reviewPlanSchema } from './plans.schema';
 import { PlansService } from './plans.service';
 
@@ -9,7 +10,7 @@ const router = Router();
 
 router.use(authenticate);
 
-router.get('/', validate(listPlansSchema, 'query'), async (req: Request, res: Response, next) => {
+router.get('/', apiCache({ ttl: 60_000 }), validate(listPlansSchema, 'query'), async (req: Request, res: Response, next) => {
   try {
     const result = await PlansService.list(req.query as any, req.user!.sub, req.user!.role);
     res.json(result);

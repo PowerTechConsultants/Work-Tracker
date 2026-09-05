@@ -25,6 +25,13 @@ export const config = {
   lockoutMinutes: Number(env('LOCKOUT_MINUTES', '15')),
   uploadDir: env('UPLOAD_DIR', 'uploads'),
   cookieSecure: env('COOKIE_SECURE', (process.env.NODE_ENV === 'production').toString()) === 'true',
+  smtp: {
+    host: process.env.SMTP_HOST || '',
+    port: Number(process.env.SMTP_PORT || '587'),
+    user: process.env.SMTP_USER || '',
+    pass: process.env.SMTP_PASS || '',
+    from: process.env.SMTP_FROM || 'noreply@hr-app.com',
+  },
 };
 
 if (config.nodeEnv === 'production') {
@@ -33,6 +40,8 @@ if (config.nodeEnv === 'production') {
     'dev-refresh-secret-change-in-production',
     'change_me_access',
     'change_me_refresh',
+    'local-dev-access-secret-32chars-min-abc123XYZ',
+    'local-dev-refresh-secret-32chars-min-xyz789ABC',
   ];
   const hasWeak = blockedSecrets.includes(config.jwtAccessSecret) || blockedSecrets.includes(config.jwtRefreshSecret);
   const tooShort = config.jwtAccessSecret.length < 32 || config.jwtRefreshSecret.length < 32;

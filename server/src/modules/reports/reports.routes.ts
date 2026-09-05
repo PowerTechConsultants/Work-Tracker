@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { validate } from '../../middleware/validate';
 import { authenticate } from '../../middleware/authenticate';
 import { requireRole } from '../../middleware/rbac';
+import { apiCache } from '../../middleware/api-cache';
 import { createReportSchema, updateReportSchema, listReportsSchema, reviewReportSchema } from './reports.schema';
 import { ReportsService } from './reports.service';
 
@@ -9,7 +10,7 @@ const router = Router();
 
 router.use(authenticate);
 
-router.get('/', validate(listReportsSchema, 'query'), async (req: Request, res: Response, next) => {
+router.get('/', apiCache({ ttl: 60_000 }), validate(listReportsSchema, 'query'), async (req: Request, res: Response, next) => {
   try {
     const result = await ReportsService.list(req.query as any, req.user!.sub, req.user!.role);
     res.json(result);

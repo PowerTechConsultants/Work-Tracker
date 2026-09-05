@@ -1,6 +1,7 @@
 import db, { uuid } from '../../db';
 import { AppError } from '../../lib/app-error';
 import { getISTDate } from '../../lib/time';
+import { sendTaskAssignment } from '../../lib/email';
 
 function mapTask(t: any) {
   return {
@@ -22,27 +23,35 @@ function mapComment(c: any) {
 }
 
 export class TasksService {
-  static create(createdById: string, input: any) {
-    return db.transaction(() => {
+  static async create(createdById: string, input: any) {
+    return await db.transaction(async () => {
       const id = uuid();
-      db.prepare(`INSERT INTO tasks (id, title, description, priority, due_date, created_by_id, department_id, estimated_hours) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(id, input.title, input.description ?? null, input.priority ?? 'medium', input.dueDate ? new Date(input.dueDate).toISOString() : null, createdById, input.departmentId ?? null, input.estimatedHours ?? null);
+      await db.prepare(`INSERT INTO tasks (id, title, description, priority, due_date, created_by_id, department_id, estimated_hours) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(id, input.title, input.description ?? null, input.priority ?? 'medium', input.dueDate ? new Date(input.dueDate).toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '') : null, createdById, input.departmentId ?? null, input.estimatedHours ?? null);
       const taskPh = input.assigneeIds.map(() => '(?, ?)').join(', ');
       const tp: any[] = [];
       for (const uid of input.assigneeIds) { tp.push(id, uid); }
-      db.prepare(`INSERT INTO task_assignments (task_id, user_id) VALUES ${taskPh}`).run(...tp);
-      const task = db.prepare('SELECT id, title, description, priority, status, created_by_id, department_id, progress_percent, due_date, started_at, completed_at, estimated_hours, actual_hours, created_at, updated_at FROM tasks WHERE id = ?').get(id) as any;
+      await db.prepare(`INSERT INTO task_assignments (task_id, user_id) VALUES ${taskPh}`).run(...tp);
+      const task = await db.prepare('SELECT id, title, description, priority, status, created_by_id, department_id, progress_percent, due_date, started_at, completed_at, estimated_hours, actual_hours, created_at, updated_at FROM tasks WHERE id = ?').get(id) as any;
       const notifPh = input.assigneeIds.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ');
       const np: any[] = [];
       for (const uid of input.assigneeIds) {
         np.push(uuid(), uid, createdById, 'New Task Assigned', `You have been assigned task: ${task.title}`, 'task', `/tasks/${id}`);
       }
-      db.prepare(`INSERT INTO notifications (id, recipient_id, sender_id, title, message, type, link) VALUES ${notifPh}`).run(...np);
+      await db.prepare(`INSERT INTO notifications (id, recipient_id, sender_id, title, message, type, link) VALUES ${notifPh}`).run(...np);
+
+      if (input.assigneeIds.length > 0) {
+        const placeholders = input.assigneeIds.map(() => '?').join(',');
+        const assignees = await db.prepare(`SELECT id, email, first_name, last_name FROM users WHERE id IN (${placeholders})`).all(...input.assigneeIds) as any[];
+        for (const assignee of assignees) {
+          try { await sendTaskAssignment({ id, title: task.title }, { id: assignee.id, email: assignee.email, firstName: assignee.first_name, lastName: assignee.last_name }); } catch (e: any) { console.error('[Email] Failed:', e.message); }
+        }
+      }
       return mapTask(task);
     })();
   }
 
-  static list(input: any, userId: string, role: string) {
+  static async list(input: any, userId: string, role: string) {
     const { page = 1, limit = 20, status, statuses, priority, priorities, search, assigneeId, assigneeIds, departmentId, dueBefore, dueAfter } = input;
     const offset = (page - 1) * limit;
     const conds: string[] = []; const params: any[] = [];
@@ -65,30 +74,30 @@ export class TasksService {
     }
     if (departmentId) { conds.push('t.department_id = ?'); params.push(departmentId); }
     if (search) { conds.push("t.title LIKE ? ESCAPE '\\'"); params.push(`%${search.replace(/[\\%_]/g, (c: string) => '\\' + c)}%`); }
-    if (dueBefore) { conds.push('t.due_date < ?'); params.push(new Date(dueBefore).toISOString()); }
-    if (dueAfter) { conds.push('t.due_date > ?'); params.push(new Date(dueAfter).toISOString()); }
+    if (dueBefore) { conds.push('t.due_date < ?'); params.push(new Date(dueBefore).toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '')); }
+    if (dueAfter) { conds.push('t.due_date > ?'); params.push(new Date(dueAfter).toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '')); }
     if (assigneeId) {
-      const ids = (db.prepare('SELECT task_id FROM task_assignments WHERE user_id = ?').all(assigneeId) as any[]).map((r: any) => r.task_id);
+      const ids = (await db.prepare('SELECT task_id FROM task_assignments WHERE user_id = ?').all(assigneeId) as any[]).map((r: any) => r.task_id);
       if (ids.length === 0) return { tasks: [], total: 0, page, limit };
       conds.push(`t.id IN (${ids.map(() => '?').join(',')})`);
       params.push(...ids);
     }
     if (assigneeIds && assigneeIds.length > 0) {
       const placeholders = assigneeIds.map(() => '?').join(',');
-      const ids = (db.prepare(`SELECT DISTINCT task_id FROM task_assignments WHERE user_id IN (${placeholders})`).all(...assigneeIds) as any[]).map((r: any) => r.task_id);
+      const ids = (await db.prepare(`SELECT DISTINCT task_id FROM task_assignments WHERE user_id IN (${placeholders})`).all(...assigneeIds) as any[]).map((r: any) => r.task_id);
       if (ids.length === 0) return { tasks: [], total: 0, page, limit };
       conds.push(`t.id IN (${ids.map(() => '?').join(',')})`);
       params.push(...ids);
     }
     const where = conds.length > 0 ? `WHERE ${conds.join(' AND ')}` : '';
-    const count = (db.prepare(`SELECT count(*) as c FROM tasks t ${where}`).get(...params) as any).c;
-    const tasks = db.prepare(`SELECT t.id, t.title, t.description, t.priority, t.status, t.created_by_id, t.department_id, t.progress_percent, t.due_date, t.started_at, t.completed_at, t.estimated_hours, t.actual_hours, t.created_at, t.updated_at FROM tasks t ${where} ORDER BY t.created_at DESC LIMIT ? OFFSET ?`).all(...params, limit, offset) as any[];
+    const count = (await db.prepare(`SELECT count(*) as c FROM tasks t ${where}`).get(...params) as any).c;
+    const tasks = await db.prepare(`SELECT t.id, t.title, t.description, t.priority, t.status, t.created_by_id, t.department_id, t.progress_percent, t.due_date, t.started_at, t.completed_at, t.estimated_hours, t.actual_hours, t.created_at, t.updated_at FROM tasks t ${where} ORDER BY t.created_at DESC LIMIT ? OFFSET ?`).all(...params, limit, offset) as any[];
     
     // Optimize: Batch fetch assignees instead of N+1 queries
     if (tasks.length === 0) return { tasks: [], total: count, page, limit };
     const taskIds = tasks.map(t => t.id);
     const assigneesStmt = db.prepare(`SELECT ta.task_id, ta.user_id, u.first_name, u.last_name, u.employee_id FROM task_assignments ta JOIN users u ON ta.user_id = u.id WHERE ta.task_id IN (${taskIds.map(() => '?').join(',')})`);
-    const allAssignees = assigneesStmt.all(...taskIds) as any[];
+    const allAssignees = await assigneesStmt.all(...taskIds) as any[];
     
     const enriched = tasks.map((t) => {
       const assignees = allAssignees.filter(a => a.task_id === t.id);
@@ -97,28 +106,28 @@ export class TasksService {
     return { tasks: enriched, total: count, page, limit };
   }
 
-  static getById(id: string, userId: string, role: string) {
-    const t = db.prepare('SELECT id, title, description, priority, status, created_by_id, department_id, progress_percent, due_date, started_at, completed_at, estimated_hours, actual_hours, created_at, updated_at FROM tasks WHERE id = ?').get(id) as any;
+  static async getById(id: string, userId: string, role: string) {
+    const t = await db.prepare('SELECT id, title, description, priority, status, created_by_id, department_id, progress_percent, due_date, started_at, completed_at, estimated_hours, actual_hours, created_at, updated_at FROM tasks WHERE id = ?').get(id) as any;
     if (!t) throw new AppError(404, 'Task not found');
     if (role === 'employee') {
-      const isAssignee = db.prepare('SELECT 1 FROM task_assignments WHERE task_id = ? AND user_id = ?').get(id, userId);
+      const isAssignee = await db.prepare('SELECT 1 FROM task_assignments WHERE task_id = ? AND user_id = ?').get(id, userId);
       if (!isAssignee && t.created_by_id !== userId) throw new AppError(403, 'Forbidden');
     }
-    const assignees = db.prepare(`SELECT ta.user_id, u.first_name, u.last_name, u.employee_id FROM task_assignments ta JOIN users u ON ta.user_id = u.id WHERE ta.task_id = ?`).all(id);
-    const comments = db.prepare('SELECT tc.*, u.first_name, u.last_name FROM task_comments tc JOIN users u ON tc.author_id = u.id WHERE tc.task_id = ? ORDER BY tc.created_at DESC').all(id);
-    const approvals = db.prepare('SELECT * FROM task_approvals WHERE task_id = ? ORDER BY requested_at DESC').all(id);
+    const assignees = await db.prepare(`SELECT ta.user_id, u.first_name, u.last_name, u.employee_id FROM task_assignments ta JOIN users u ON ta.user_id = u.id WHERE ta.task_id = ?`).all(id);
+    const comments = await db.prepare('SELECT tc.*, u.first_name, u.last_name FROM task_comments tc JOIN users u ON tc.author_id = u.id WHERE tc.task_id = ? ORDER BY tc.created_at DESC').all(id);
+    const approvals = await db.prepare('SELECT * FROM task_approvals WHERE task_id = ? ORDER BY requested_at DESC').all(id);
     return { ...mapTask(t), assignees: assignees.map((a: any) => ({ userId: a.user_id, firstName: a.first_name, lastName: a.last_name, employeeId: a.employee_id })), comments, approvals };
   }
 
-  static update(id: string, input: any, userId?: string, role?: string) {
-    return db.transaction(() => {
-      const existing = db.prepare('SELECT id, title, status, started_at, created_at, created_by_id FROM tasks WHERE id = ?').get(id) as any;
+  static async update(id: string, input: any, userId?: string, role?: string) {
+    return await db.transaction(async () => {
+      const existing = await db.prepare('SELECT id, title, status, started_at, created_at, created_by_id FROM tasks WHERE id = ?').get(id) as any;
       if (!existing) throw new AppError(404, 'Task not found');
 
       const isEmployee = role === 'employee';
       const empAllowed = ['status', 'progressPercent', 'actualHours'];
       if (isEmployee) {
-        const isAssignee = db.prepare('SELECT 1 FROM task_assignments WHERE task_id = ? AND user_id = ?').get(id, userId);
+        const isAssignee = await db.prepare('SELECT 1 FROM task_assignments WHERE task_id = ? AND user_id = ?').get(id, userId);
         if (!isAssignee && existing.created_by_id !== userId) throw new AppError(403, 'You are not assigned to this task');
         const blocked = Object.keys(input).filter((k) => !empAllowed.includes(k) && input[k] !== undefined);
         if (blocked.length > 0) throw new AppError(403, `Employees cannot update: ${blocked.join(', ')}`);
@@ -147,100 +156,106 @@ export class TasksService {
         if (input.status === 'pending') sets.push('started_at = NULL');
       }
       if (input.progressPercent !== undefined) { sets.push('progress_percent = ?'); params.push(input.progressPercent); }
-      if (input.dueDate !== undefined) { sets.push('due_date = ?'); params.push(input.dueDate ? new Date(input.dueDate).toISOString() : null); }
+      if (input.dueDate !== undefined) { sets.push('due_date = ?'); params.push(input.dueDate ? new Date(input.dueDate).toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '') : null); }
       if (input.estimatedHours !== undefined) { sets.push('estimated_hours = ?'); params.push(input.estimatedHours); }
       if (input.actualHours !== undefined) { sets.push('actual_hours = ?'); params.push(input.actualHours); }
       params.push(id);
-      db.prepare(`UPDATE tasks SET ${sets.join(', ')} WHERE id = ?`).run(...params);
+      await db.prepare(`UPDATE tasks SET ${sets.join(', ')} WHERE id = ?`).run(...params);
       if (input.assigneeIds) {
-        db.prepare('DELETE FROM task_assignments WHERE task_id = ?').run(id);
+        await db.prepare('DELETE FROM task_assignments WHERE task_id = ?').run(id);
         const ph = input.assigneeIds.map(() => '(?, ?)').join(', ');
         const p: any[] = [];
         for (const uid of input.assigneeIds) { p.push(id, uid); }
-        db.prepare(`INSERT INTO task_assignments (task_id, user_id) VALUES ${ph}`).run(...p);
+        await db.prepare(`INSERT INTO task_assignments (task_id, user_id) VALUES ${ph}`).run(...p);
       }
-      return mapTask(db.prepare('SELECT id, title, description, priority, status, created_by_id, department_id, progress_percent, due_date, started_at, completed_at, estimated_hours, actual_hours, created_at, updated_at FROM tasks WHERE id = ?').get(id));
+      return mapTask(await db.prepare('SELECT id, title, description, priority, status, created_by_id, department_id, progress_percent, due_date, started_at, completed_at, estimated_hours, actual_hours, created_at, updated_at FROM tasks WHERE id = ?').get(id));
     })();
   }
 
-  static delete(id: string) {
-    if (!db.prepare('SELECT id FROM tasks WHERE id = ?').get(id)) throw new AppError(404, 'Task not found');
-    db.prepare('DELETE FROM tasks WHERE id = ?').run(id);
+  static async delete(id: string) {
+    if (!await db.prepare('SELECT id FROM tasks WHERE id = ?').get(id)) throw new AppError(404, 'Task not found');
+    await db.transaction(async () => {
+      await db.prepare('DELETE FROM task_assignments WHERE task_id = ?').run(id);
+      await db.prepare('DELETE FROM task_comments WHERE task_id = ?').run(id);
+      await db.prepare('DELETE FROM task_approvals WHERE task_id = ?').run(id);
+      await db.prepare('DELETE FROM task_attachments WHERE task_id = ?').run(id);
+      await db.prepare('DELETE FROM tasks WHERE id = ?').run(id);
+    })();
     return { message: 'Task deleted' };
   }
 
-  static addComment(taskId: string, authorId: string, message: string, role: string) {
-    if (!db.prepare('SELECT id FROM tasks WHERE id = ?').get(taskId)) throw new AppError(404, 'Task not found');
+  static async addComment(taskId: string, authorId: string, message: string, role: string) {
+    if (!await db.prepare('SELECT id FROM tasks WHERE id = ?').get(taskId)) throw new AppError(404, 'Task not found');
     if (role !== 'director' && role !== 'hr') {
-      const isAssignee = db.prepare('SELECT 1 FROM task_assignments WHERE task_id = ? AND user_id = ?').get(taskId, authorId);
-      const task = db.prepare('SELECT created_by_id FROM tasks WHERE id = ?').get(taskId) as any;
+      const isAssignee = await db.prepare('SELECT 1 FROM task_assignments WHERE task_id = ? AND user_id = ?').get(taskId, authorId);
+      const task = await db.prepare('SELECT created_by_id FROM tasks WHERE id = ?').get(taskId) as any;
       if (!isAssignee && task.created_by_id !== authorId) throw new AppError(403, 'You are not authorized to comment on this task');
     }
     const id = uuid();
-    db.prepare('INSERT INTO task_comments (id, task_id, author_id, message) VALUES (?, ?, ?, ?)').run(id, taskId, authorId, message);
-    const comment = db.prepare('SELECT tc.*, u.first_name, u.last_name FROM task_comments tc JOIN users u ON tc.author_id = u.id WHERE tc.id = ?').get(id);
+    await db.prepare('INSERT INTO task_comments (id, task_id, author_id, message) VALUES (?, ?, ?, ?)').run(id, taskId, authorId, message);
+    const comment = await db.prepare('SELECT tc.*, u.first_name, u.last_name FROM task_comments tc JOIN users u ON tc.author_id = u.id WHERE tc.id = ?').get(id);
     return mapComment(comment);
   }
 
-  static getComments(taskId: string, userId: string, role: string) {
-    if (!db.prepare('SELECT id FROM tasks WHERE id = ?').get(taskId)) throw new AppError(404, 'Task not found');
+  static async getComments(taskId: string, userId: string, role: string) {
+    if (!await db.prepare('SELECT id FROM tasks WHERE id = ?').get(taskId)) throw new AppError(404, 'Task not found');
     if (role !== 'director' && role !== 'hr') {
-      const isAssignee = db.prepare('SELECT 1 FROM task_assignments WHERE task_id = ? AND user_id = ?').get(taskId, userId);
-      const task = db.prepare('SELECT created_by_id FROM tasks WHERE id = ?').get(taskId) as any;
+      const isAssignee = await db.prepare('SELECT 1 FROM task_assignments WHERE task_id = ? AND user_id = ?').get(taskId, userId);
+      const task = await db.prepare('SELECT created_by_id FROM tasks WHERE id = ?').get(taskId) as any;
       if (!isAssignee && task.created_by_id !== userId) throw new AppError(403, 'Forbidden');
     }
-    const comments = db.prepare('SELECT tc.*, u.first_name, u.last_name FROM task_comments tc JOIN users u ON tc.author_id = u.id WHERE tc.task_id = ? ORDER BY tc.created_at DESC').all(taskId) as any[];
+    const comments = await db.prepare('SELECT tc.*, u.first_name, u.last_name FROM task_comments tc JOIN users u ON tc.author_id = u.id WHERE tc.task_id = ? ORDER BY tc.created_at DESC').all(taskId) as any[];
     return { comments: comments.map(mapComment) };
   }
 
-  static requestApproval(taskId: string, requestedById: string, comment?: string, role?: string) {
-    return db.transaction(() => {
-      const task = db.prepare('SELECT id, title, created_by_id FROM tasks WHERE id = ?').get(taskId) as any;
+  static async requestApproval(taskId: string, requestedById: string, comment?: string, role?: string) {
+    return await db.transaction(async () => {
+      const task = await db.prepare('SELECT id, title, created_by_id FROM tasks WHERE id = ?').get(taskId) as any;
       if (!task) throw new AppError(404, 'Task not found');
       if (role === 'employee') {
-        const isAssignee = db.prepare('SELECT 1 FROM task_assignments WHERE task_id = ? AND user_id = ?').get(taskId, requestedById);
+        const isAssignee = await db.prepare('SELECT 1 FROM task_assignments WHERE task_id = ? AND user_id = ?').get(taskId, requestedById);
         if (!isAssignee && task.created_by_id !== requestedById) throw new AppError(403, 'You are not assigned to this task');
       }
       const id = uuid();
-      db.prepare('INSERT INTO task_approvals (id, task_id, requested_by_id, request_comment) VALUES (?, ?, ?, ?)').run(id, taskId, requestedById, comment ?? null);
-      const admins = db.prepare("SELECT id FROM users WHERE role IN ('director', 'hr')").all() as any[];
+      await db.prepare('INSERT INTO task_approvals (id, task_id, requested_by_id, request_comment) VALUES (?, ?, ?, ?)').run(id, taskId, requestedById, comment ?? null);
+      const admins = await db.prepare("SELECT id FROM users WHERE role IN ('director', 'hr')").all() as any[];
       const insertNotif = db.prepare('INSERT INTO notifications (id, recipient_id, sender_id, title, message, type, link) VALUES (?, ?, ?, ?, ?, ?, ?)');
       for (const a of admins) {
-        insertNotif.run(uuid(), a.id, requestedById, 'Task Approval Requested', `Task "${task.title}" is pending your review`, 'approval', `/tasks/${taskId}`);
+        await insertNotif.run(uuid(), a.id, requestedById, 'Task Approval Requested', `Task "${task.title}" is pending your review`, 'approval', `/tasks/${taskId}`);
       }
-      return db.prepare('SELECT id, task_id, requested_by_id, status, request_comment, reviewed_by_id, comment, requested_at, reviewed_at FROM task_approvals WHERE id = ?').get(id);
+      return await db.prepare('SELECT id, task_id, requested_by_id, status, request_comment, reviewed_by_id, comment, requested_at, reviewed_at FROM task_approvals WHERE id = ?').get(id);
     })();
   }
 
-  static reviewApproval(approvalId: string, reviewedById: string, status: string, comment?: string) {
-    return db.transaction(() => {
-      const a = db.prepare('SELECT id, task_id, requested_by_id, status FROM task_approvals WHERE id = ?').get(approvalId) as any;
+  static async reviewApproval(approvalId: string, reviewedById: string, status: string, comment?: string) {
+    return await db.transaction(async () => {
+      const a = await db.prepare('SELECT id, task_id, requested_by_id, status FROM task_approvals WHERE id = ?').get(approvalId) as any;
       if (!a) throw new AppError(404, 'Approval not found');
       if (a.status !== 'pending') throw new AppError(409, 'Already reviewed');
       if (a.requested_by_id === reviewedById) throw new AppError(403, 'Cannot review your own approval request');
-      db.prepare("UPDATE task_approvals SET status = ?, reviewed_by_id = ?, comment = ?, reviewed_at = datetime('now') WHERE id = ?").run(status, reviewedById, comment ?? null, approvalId);
-      db.prepare('INSERT INTO notifications (id, recipient_id, sender_id, title, message, type, link) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      await db.prepare("UPDATE task_approvals SET status = ?, reviewed_by_id = ?, comment = ?, reviewed_at = datetime('now') WHERE id = ?").run(status, reviewedById, comment ?? null, approvalId);
+      await db.prepare('INSERT INTO notifications (id, recipient_id, sender_id, title, message, type, link) VALUES (?, ?, ?, ?, ?, ?, ?)')
         .run(uuid(), a.requested_by_id, reviewedById, `Task ${status}`, `Your task approval has been ${status}`, status === 'approved' ? 'success' : 'warning', `/tasks/${a.task_id}`);
-      return db.prepare('SELECT id, task_id, requested_by_id, status, request_comment, reviewed_by_id, comment, requested_at, reviewed_at FROM task_approvals WHERE id = ?').get(approvalId);
+      return await db.prepare('SELECT id, task_id, requested_by_id, status, request_comment, reviewed_by_id, comment, requested_at, reviewed_at FROM task_approvals WHERE id = ?').get(approvalId);
     })();
   }
 
-  static getStats(userId?: string, role?: string) {
+  static async getStats(userId?: string, role?: string) {
     let where = ''; const params: any[] = [];
     if (role === 'employee' && userId) {
       where = 'WHERE id IN (SELECT task_id FROM task_assignments WHERE user_id = ? UNION SELECT id FROM tasks WHERE created_by_id = ?)';
       params.push(userId, userId);
     }
-    const stats = db.prepare(`SELECT status, COUNT(*) as count FROM tasks ${where} GROUP BY status`).all(...params) as any[];
+    const stats = await db.prepare(`SELECT status, COUNT(*) as count FROM tasks ${where} GROUP BY status`).all(...params) as any[];
     const statusMap = Object.fromEntries(stats.map((r: any) => [r.status, r.count]));
     const total = stats.reduce((sum: number, r: any) => sum + r.count, 0);
     const today = getISTDate();
-    const overdue = (db.prepare(`SELECT COUNT(*) as c FROM tasks ${where ? where + ' AND' : 'WHERE'} due_date < ? AND status != 'completed'`).get(...params, today) as any).c;
+    const overdue = (await db.prepare(`SELECT COUNT(*) as c FROM tasks ${where ? where + ' AND' : 'WHERE'} due_date < ? AND status != 'completed'`).get(...params, today) as any).c;
     return { total, pending: statusMap.pending || 0, inProgress: statusMap.in_progress || 0, completed: statusMap.completed || 0, overdue };
   }
 
-  static getEmployeeProgress() {
-    const rows = db.prepare(`
+  static async getEmployeeProgress() {
+    const rows = await db.prepare(`
       SELECT u.id, u.first_name, u.last_name, u.employee_id,
         COUNT(t.id) as total_tasks,
         SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) as completed,

@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { validate } from '../../middleware/validate';
 import { authenticate } from '../../middleware/authenticate';
 import { requireRole } from '../../middleware/rbac';
+import { apiCache } from '../../middleware/api-cache';
 import {
   createTaskSchema, updateTaskSchema, listTasksSchema,
   addCommentSchema, requestApprovalSchema, reviewApprovalSchema,
@@ -12,7 +13,7 @@ const router = Router();
 
 router.use(authenticate);
 
-router.get('/stats', async (req: Request, res: Response, next) => {
+router.get('/stats', apiCache({ ttl: 60_000 }), async (req: Request, res: Response, next) => {
   try {
     const stats = await TasksService.getStats(req.user!.sub, req.user!.role);
     res.json(stats);
@@ -28,7 +29,7 @@ router.get('/', validate(listTasksSchema, 'query'), async (req: Request, res: Re
 
 router.get('/employee-progress', requireRole('director', 'hr'), async (req: Request, res: Response, next) => {
   try {
-    const result = TasksService.getEmployeeProgress();
+    const result = await TasksService.getEmployeeProgress();
     res.json(result);
   } catch (err) { next(err); }
 });

@@ -61,3 +61,12 @@ export function isISTPast(hours: number, minutes: number): boolean {
 export function getISTDayOfWeek(): string {
   return new Date().toLocaleDateString('en-US', { timeZone: IST_TIMEZONE, weekday: 'long' });
 }
+
+export function isSundayIST(dateStr: string): boolean {
+  // dateStr is YYYY-MM-DD already in IST — parse as UTC to get correct day-of-week
+  const parts = dateStr.split('-').map(Number);
+  const y = parts[0] ?? 0;
+  const m = parts[1] ?? 1;
+  const d = parts[2] ?? 1;
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay() === 0;
+}

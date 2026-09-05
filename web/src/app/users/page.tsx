@@ -24,7 +24,7 @@ export default function UsersPage() {
   const [roleFilter, setRoleFilter] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState({ email: '', password: '', firstName: '', lastName: '', role: 'employee', departmentId: '', designation: '', phoneNumber: '' });
+  const [form, setForm] = useState({ email: '', password: '', firstName: '', lastName: '', role: 'employee', departmentId: '', designation: '', phoneNumber: '', dob: '', gender: 'male' as 'male'|'female'|'other', fatherName: '', nationality: '', qualification: '', addressStreet: '', addressCity: '', addressState: '', addressPincode: '', joiningDate: '' });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [showExport, setShowExport] = useState(false);
   const [error, setError] = useState('');
@@ -39,6 +39,16 @@ export default function UsersPage() {
     { id: 'departmentId', label: 'Department ID' },
     { id: 'status', label: 'Status' },
     { id: 'phoneNumber', label: 'Phone' },
+    { id: 'dob', label: 'DOB' },
+    { id: 'gender', label: 'Gender' },
+    { id: 'fatherName', label: 'Father/Husband Name' },
+    { id: 'nationality', label: 'Nationality' },
+    { id: 'qualification', label: 'Qualification' },
+    { id: 'addressStreet', label: 'Street' },
+    { id: 'addressCity', label: 'City' },
+    { id: 'addressState', label: 'State' },
+    { id: 'addressPincode', label: 'Pincode' },
+    { id: 'joiningDate', label: 'DOJ' },
   ];
 
   const validateForm = () => {
@@ -55,6 +65,23 @@ export default function UsersPage() {
     if (!form.lastName) errors.lastName = 'Last name is required';
     else if (!/^[a-zA-Z\s'-]+$/.test(form.lastName)) errors.lastName = 'Last name contains invalid characters';
     if (form.phoneNumber && !/^\+?[1-9]\d{1,14}$/.test(form.phoneNumber)) errors.phoneNumber = 'Invalid phone number format';
+    if (!form.dob) errors.dob = 'DOB is required';
+    else {
+      const d = new Date(form.dob + 'T00:00:00Z');
+      const age = new Date().getFullYear() - d.getUTCFullYear();
+      if (isNaN(d.getTime()) || d >= new Date() || age < 18) errors.dob = 'Must be at least 18 years old';
+    }
+    if (!form.gender) errors.gender = 'Gender is required';
+    if (!form.fatherName) errors.fatherName = 'Father/Husband name is required';
+    else if (form.fatherName.length < 2) errors.fatherName = 'Too short';
+    if (!form.nationality) errors.nationality = 'Nationality is required';
+    if (!form.qualification) errors.qualification = 'Qualification is required';
+    if (!form.addressStreet) errors.addressStreet = 'Street is required';
+    if (!form.addressCity) errors.addressCity = 'City is required';
+    if (!form.addressState) errors.addressState = 'State is required';
+    if (!form.addressPincode) errors.addressPincode = 'Pincode is required';
+    else if (!/^\d{6}$/.test(form.addressPincode)) errors.addressPincode = 'Pincode must be 6 digits';
+    if (!form.joiningDate) errors.joiningDate = 'DOJ is required';
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -86,19 +113,19 @@ export default function UsersPage() {
 
   const createUser = useMutation({
     mutationFn: async (d: typeof form) => {
-      const payload: any = { firstName: d.firstName, lastName: d.lastName, role: d.role };
+      const payload: any = { firstName: d.firstName, lastName: d.lastName, role: d.role, dob: d.dob, gender: d.gender, fatherName: d.fatherName, nationality: d.nationality, qualification: d.qualification, addressStreet: d.addressStreet, addressCity: d.addressCity, addressState: d.addressState, addressPincode: d.addressPincode, joiningDate: d.joiningDate ? new Date(d.joiningDate).toISOString() : undefined };
       if (!editId) { payload.email = d.email; payload.password = d.password; }
       if (d.departmentId) payload.departmentId = d.departmentId;
       if (d.designation) payload.designation = d.designation;
       if (d.phoneNumber) payload.phoneNumber = d.phoneNumber;
       return editId ? (await api.patch(`/users/${editId}`, payload)).data : (await api.post('/users', payload)).data;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['users'] }); setShowCreate(false); setEditId(null); setForm({ email: '', password: '', firstName: '', lastName: '', role: 'employee', departmentId: '', designation: '', phoneNumber: '' }); setFormErrors({}); toast.success(editId ? 'User updated successfully' : 'User created successfully'); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['users'] }); setShowCreate(false); setEditId(null); setForm({ email: '', password: '', firstName: '', lastName: '', role: 'employee', departmentId: '', designation: '', phoneNumber: '', dob: '', gender: 'male' as 'male'|'female'|'other', fatherName: '', nationality: '', qualification: '', addressStreet: '', addressCity: '', addressState: '', addressPincode: '', joiningDate: '' }); setFormErrors({}); toast.success(editId ? 'User updated successfully' : 'User created successfully'); },
     onError: (e) => { setError(getApiError(e, 'Failed')); toast.error(getApiError(e, 'Failed to save user')); },
   });
 
   const deleteUser = useMutation({
-    mutationFn: async (id: string) => (await api.delete(`/users/${id}`)).data,
+    mutationFn: async (id: string) => (await api.delete(`/users/${id}`, { data: { confirm: 'DELETE' } } as any)).data,
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: ['users'] });
       const queries = qc.getQueriesData({ queryKey: ['users'] });
@@ -124,7 +151,7 @@ export default function UsersPage() {
             {data?.users && data.users.length > 0 && (
               <button onClick={() => setShowExport(true)} className="flex items-center gap-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2.5 text-sm font-medium transition border border-slate-700"><Download className="h-4 w-4" />Export</button>
             )}
-            <button onClick={() => { setShowCreate(true); setEditId(null); setForm({ email: '', password: '', firstName: '', lastName: '', role: 'employee', departmentId: '', designation: '', phoneNumber: '' }); setFormErrors({}); }} className="flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white px-4 py-2.5 text-sm font-semibold transition"><Plus className="h-4 w-4" />New User</button>
+            <button onClick={() => { setShowCreate(true); setEditId(null); setForm({ email: '', password: '', firstName: '', lastName: '', role: 'employee', departmentId: '', designation: '', phoneNumber: '', dob: '', gender: 'male' as 'male'|'female'|'other', fatherName: '', nationality: '', qualification: '', addressStreet: '', addressCity: '', addressState: '', addressPincode: '', joiningDate: '' }); setFormErrors({}); }} className="flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white px-4 py-2.5 text-sm font-semibold transition"><Plus className="h-4 w-4" />New User</button>
           </div>
         </div>
 
@@ -145,7 +172,7 @@ export default function UsersPage() {
           empty={<p className="text-sm text-slate-500">No users</p>}
           actions={(u: any) => (
             <>
-              <button onClick={() => { setEditId(u.id); setForm({ email: u.email, password: '', firstName: u.firstName, lastName: u.lastName, role: u.role, departmentId: u.departmentId || '', designation: u.designation || '', phoneNumber: u.phoneNumber || '' }); setShowCreate(true); setFormErrors({}); }} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition"><Pencil className="h-4 w-4" /></button>
+              <button onClick={() => { setEditId(u.id); setForm({ email: u.email, password: '', firstName: u.firstName, lastName: u.lastName, role: u.role, departmentId: u.departmentId || '', designation: u.designation || '', phoneNumber: u.phoneNumber || '', dob: u.dob ? u.dob.split('T')[0] : '', gender: u.gender || 'male', fatherName: u.fatherName || '', nationality: u.nationality || '', qualification: u.qualification || '', addressStreet: u.addressStreet || '', addressCity: u.addressCity || '', addressState: u.addressState || '', addressPincode: u.addressPincode || '', joiningDate: u.joiningDate ? u.joiningDate.split('T')[0] : '' }); setShowCreate(true); setFormErrors({}); }} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition"><Pencil className="h-4 w-4" /></button>
               <button onClick={async () => { if (await confirm({ title: 'Delete User', message: 'This action cannot be undone. Are you sure you want to delete this user?', variant: 'danger', confirmText: 'Delete' })) deleteUser.mutate(u.id); }} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-rose-400 transition"><Trash2 className="h-4 w-4" /></button>
             </>
           )}
@@ -195,6 +222,66 @@ export default function UsersPage() {
               <label className="block text-sm text-slate-300 mb-1">Phone Number</label>
               <input type="tel" value={form.phoneNumber} onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })} className={`w-full rounded-xl border ${formErrors.phoneNumber ? 'border-rose-500' : 'border-slate-700'} bg-slate-800 px-4 py-2.5 text-sm text-white`} placeholder="+1234567890" />
               {formErrors.phoneNumber && <p className="text-xs text-rose-400 mt-1">{formErrors.phoneNumber}</p>}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">DOB *</label>
+                <input type="date" value={form.dob} onChange={(e) => setForm({ ...form, dob: e.target.value })} className={`w-full rounded-xl border ${formErrors.dob ? 'border-rose-500' : 'border-slate-700'} bg-slate-800 px-4 py-2.5 text-sm text-white`} />
+                {formErrors.dob && <p className="text-xs text-rose-400 mt-1">{formErrors.dob}</p>}
+              </div>
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">DOJ *</label>
+                <input type="date" value={form.joiningDate} onChange={(e) => setForm({ ...form, joiningDate: e.target.value })} className={`w-full rounded-xl border ${formErrors.joiningDate ? 'border-rose-500' : 'border-slate-700'} bg-slate-800 px-4 py-2.5 text-sm text-white`} />
+                {formErrors.joiningDate && <p className="text-xs text-rose-400 mt-1">{formErrors.joiningDate}</p>}
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">Gender *</label>
+                <select value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value as any })} className={`w-full rounded-xl border ${formErrors.gender ? 'border-rose-500' : 'border-slate-700'} bg-slate-800 px-4 py-2.5 text-sm text-white`}>
+                  <option value="male">Male</option><option value="female">Female</option><option value="other">Other</option>
+                </select>
+                {formErrors.gender && <p className="text-xs text-rose-400 mt-1">{formErrors.gender}</p>}
+              </div>
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">Father/Husband Name *</label>
+                <input value={form.fatherName} onChange={(e) => setForm({ ...form, fatherName: e.target.value })} className={`w-full rounded-xl border ${formErrors.fatherName ? 'border-rose-500' : 'border-slate-700'} bg-slate-800 px-4 py-2.5 text-sm text-white`} />
+                {formErrors.fatherName && <p className="text-xs text-rose-400 mt-1">{formErrors.fatherName}</p>}
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">Nationality *</label>
+                <input value={form.nationality} onChange={(e) => setForm({ ...form, nationality: e.target.value })} className={`w-full rounded-xl border ${formErrors.nationality ? 'border-rose-500' : 'border-slate-700'} bg-slate-800 px-4 py-2.5 text-sm text-white`} placeholder="Indian" />
+                {formErrors.nationality && <p className="text-xs text-rose-400 mt-1">{formErrors.nationality}</p>}
+              </div>
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">Qualification *</label>
+                <input value={form.qualification} onChange={(e) => setForm({ ...form, qualification: e.target.value })} className={`w-full rounded-xl border ${formErrors.qualification ? 'border-rose-500' : 'border-slate-700'} bg-slate-800 px-4 py-2.5 text-sm text-white`} placeholder="B.Tech" />
+                {formErrors.qualification && <p className="text-xs text-rose-400 mt-1">{formErrors.qualification}</p>}
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm text-slate-300 mb-1">Permanent Address - Street *</label>
+              <input value={form.addressStreet} onChange={(e) => setForm({ ...form, addressStreet: e.target.value })} className={`w-full rounded-xl border ${formErrors.addressStreet ? 'border-rose-500' : 'border-slate-700'} bg-slate-800 px-4 py-2.5 text-sm text-white`} />
+              {formErrors.addressStreet && <p className="text-xs text-rose-400 mt-1">{formErrors.addressStreet}</p>}
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">City *</label>
+                <input value={form.addressCity} onChange={(e) => setForm({ ...form, addressCity: e.target.value })} className={`w-full rounded-xl border ${formErrors.addressCity ? 'border-rose-500' : 'border-slate-700'} bg-slate-800 px-4 py-2.5 text-sm text-white`} />
+                {formErrors.addressCity && <p className="text-xs text-rose-400 mt-1">{formErrors.addressCity}</p>}
+              </div>
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">State *</label>
+                <input value={form.addressState} onChange={(e) => setForm({ ...form, addressState: e.target.value })} className={`w-full rounded-xl border ${formErrors.addressState ? 'border-rose-500' : 'border-slate-700'} bg-slate-800 px-4 py-2.5 text-sm text-white`} />
+                {formErrors.addressState && <p className="text-xs text-rose-400 mt-1">{formErrors.addressState}</p>}
+              </div>
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">Pincode *</label>
+                <input value={form.addressPincode} onChange={(e) => setForm({ ...form, addressPincode: e.target.value })} className={`w-full rounded-xl border ${formErrors.addressPincode ? 'border-rose-500' : 'border-slate-700'} bg-slate-800 px-4 py-2.5 text-sm text-white`} maxLength={6} />
+                {formErrors.addressPincode && <p className="text-xs text-rose-400 mt-1">{formErrors.addressPincode}</p>}
+              </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div><label className="block text-sm text-slate-300 mb-1">Role *</label><select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-white"><option value="employee">Employee</option><option value="hr">HR</option><option value="director">Director</option></select></div>

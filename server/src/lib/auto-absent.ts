@@ -1,5 +1,5 @@
 import db, { uuid, getSetting, setSetting } from '../db';
-import { getISTDate, isISTPast } from './time';
+import { getISTDate, isISTPast, isSundayIST } from './time';
 import { cache } from './cache';
 
 const CHECK_INTERVAL_MS = 300_000;
@@ -12,47 +12,47 @@ function addDays(iso: string, days: number): string {
   return d.toISOString().split('T')[0]!;
 }
 
-function acquireLock(): boolean {
+async function acquireLock(): Promise<boolean> {
   const now = Date.now();
-  const existing = getSetting('auto_absent_lock');
+  const existing = await getSetting('auto_absent_lock');
   if (existing) {
     const ts = Number(existing);
     if (!isNaN(ts) && now - ts < CHECK_INTERVAL_MS) return false;
   }
-  setSetting('auto_absent_lock', String(now));
+  await setSetting('auto_absent_lock', String(now));
   return true;
 }
 
-function releaseLock(): void {
-  setSetting('auto_absent_lock', '');
+async function releaseLock(): Promise<void> {
+  await setSetting('auto_absent_lock', '');
 }
 
-function invalidateAnalyticsCache() {
+async function invalidateAnalyticsCache() {
   try {
-    cache.delByPrefix('/api/v1/analytics/');
+    await cache.delByPrefix('/api/v1/analytics/');
   } catch (e) {
     console.error('[Auto-Absent] Analytics cache invalidation failed:', e);
   }
 }
 
-function skipUsersForHoliday(date: string): string[] {
-  const holidayIds = (db.prepare('SELECT id FROM holidays WHERE date = ?').all(date) as any[]).map((r: any) => r.id);
+async function skipUsersForHoliday(date: string): Promise<string[]> {
+  const holidayIds = (await db.prepare('SELECT id FROM holidays WHERE date = ?').all(date) as any[]).map((r: any) => r.id);
   if (holidayIds.length === 0) return [];
 
   const placeholders = holidayIds.map(() => '?').join(',');
-  const assignees = db.prepare(`SELECT user_id FROM holiday_assignees WHERE holiday_id IN (${placeholders})`).all(...holidayIds) as any[];
+  const assignees = await db.prepare(`SELECT user_id FROM holiday_assignees WHERE holiday_id IN (${placeholders})`).all(...holidayIds) as any[];
   return assignees.map((r: any) => r.user_id);
 }
 
-function isCompanyWideHoliday(date: string): boolean {
-  const holidayIds = (db.prepare('SELECT id FROM holidays WHERE date = ?').all(date) as any[]).map((r: any) => r.id);
+async function isCompanyWideHoliday(date: string): Promise<boolean> {
+  const holidayIds = (await db.prepare('SELECT id FROM holidays WHERE date = ?').all(date) as any[]).map((r: any) => r.id);
   if (holidayIds.length === 0) return false;
   const placeholders = holidayIds.map(() => '?').join(',');
-  const assigned = db.prepare(`SELECT 1 FROM holiday_assignees WHERE holiday_id IN (${placeholders}) LIMIT 1`).get(...holidayIds);
+  const assigned = await db.prepare(`SELECT 1 FROM holiday_assignees WHERE holiday_id IN (${placeholders}) LIMIT 1`).get(...holidayIds);
   return !assigned;
 }
 
-function markAbsentForDay(date: string, skipUserIds: string[]) {
+async function markAbsentForDay(date: string, skipUserIds: string[]) {
   let params: any[] = [];
   let skipClause = '';
   if (skipUserIds.length > 0) {
@@ -61,10 +61,10 @@ function markAbsentForDay(date: string, skipUserIds: string[]) {
   }
 
   const existingIds = new Set(
-    (db.prepare(`SELECT user_id FROM attendance WHERE date = ?`).all(date) as any[]).map((r: any) => r.user_id)
+    (await db.prepare(`SELECT user_id FROM attendance WHERE date = ?`).all(date) as any[]).map((r: any) => r.user_id)
   );
 
-  const activeUsers = db.prepare(`SELECT id, joining_date FROM users WHERE status = 'active'${skipClause}`).all(...params) as any[];
+  const activeUsers = await db.prepare(`SELECT id, joining_date FROM users WHERE status = 'active'${skipClause}`).all(...params) as any[];
   const toInsert = activeUsers.filter((u: any) => {
     if (existingIds.has(u.id)) return false;
     if (u.joining_date && u.joining_date > date) return false;
@@ -73,9 +73,9 @@ function markAbsentForDay(date: string, skipUserIds: string[]) {
 
   if (toInsert.length === 0) return;
 
-  const now = new Date().toISOString();
+  const now = new Date().toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
   const CHUNK = 500;
-  const insertBatch = db.transaction(() => {
+  const insertBatch = db.transaction(async () => {
     for (let i = 0; i < toInsert.length; i += CHUNK) {
       const chunk = toInsert.slice(i, i + CHUNK);
       const placeholders = chunk.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ');
@@ -83,34 +83,33 @@ function markAbsentForDay(date: string, skipUserIds: string[]) {
       for (const user of chunk) {
         params.push(uuid(), user.id, date, 'absent', null, now, now);
       }
-      db.prepare(`INSERT OR IGNORE INTO attendance (id, user_id, date, status, notes, created_at, updated_at) VALUES ${placeholders}`).run(...params);
+      await db.prepare(`INSERT OR IGNORE INTO attendance (id, user_id, date, status, notes, created_at, updated_at) VALUES ${placeholders}`).run(...params);
     }
   });
-  insertBatch();
-  invalidateAnalyticsCache();
+  await insertBatch();
+  await invalidateAnalyticsCache();
 }
 
-function processDay(date: string) {
-  const dayOfWeek = new Date(`${date}T00:00:00Z`).getUTCDay();
-  if (dayOfWeek === 0) return;
+async function processDay(date: string) {
+  if (isSundayIST(date)) return;
 
-  const holidayUserIds = skipUsersForHoliday(date);
-  if (holidayUserIds.length === 0 && isCompanyWideHoliday(date)) return;
+  const holidayUserIds = await skipUsersForHoliday(date);
+  if (holidayUserIds.length === 0 && await isCompanyWideHoliday(date)) return;
 
-  markAbsentForDay(date, holidayUserIds);
+  await markAbsentForDay(date, holidayUserIds);
 }
 
 // Backfills any missed working days since the last processed date (unlimited).
 // Runs on startup and on each interval tick. Idempotent: advances
 // auto_absent_last_date as it goes, and never overwrites existing rows.
 // A single-instance lease lock prevents two server processes from both running.
-function backfillAbsentDates() {
-  if (!acquireLock()) return;
+async function backfillAbsentDates() {
+  if (!(await acquireLock())) return;
   try {
     const today = getISTDate();
     // Only mark *today* once the daily threshold has passed; all earlier dates are fair game.
     const throughToday = isISTPast(ABSENT_MARK_HOUR, ABSENT_MARK_MINUTE);
-    const lastProcessed = getSetting('auto_absent_last_date');
+    const lastProcessed = await getSetting('auto_absent_last_date');
     // Anchor to yesterday when the cursor is missing so a fresh start never
     // backfills months of history from Jan 1.
     const start = lastProcessed ? addDays(lastProcessed, 1) : addDays(today, -1);
@@ -119,34 +118,30 @@ function backfillAbsentDates() {
 
     if (cursor > cutoff) return;
 
-    const runDay = db.transaction((date: string) => {
-      processDay(date);
-      setSetting('auto_absent_last_date', date);
+    const runDay = db.transaction(async (date: string) => {
+      await processDay(date);
+      await setSetting('auto_absent_last_date', date);
     });
 
     let safety = 0;
     while (cursor <= cutoff && safety < 370) {
-      runDay(cursor);
+      await runDay(cursor);
       cursor = addDays(cursor, 1);
       safety += 1;
     }
   } finally {
-    releaseLock();
+    await releaseLock();
   }
 }
 
 export function startAutoAbsentScheduler() {
   try {
-    backfillAbsentDates();
+    backfillAbsentDates().catch(err => console.error('[Auto-Absent] Initial backfill error:', err));
     console.log(`[Auto-Absent] Scheduler started (interval: ${CHECK_INTERVAL_MS / 1000}s)`);
   } catch (err) {
     console.error('[Auto-Absent] Initial backfill error:', err);
   }
   setInterval(() => {
-    try {
-      backfillAbsentDates();
-    } catch (err) {
-      console.error('[Auto-Absent] Error:', err);
-    }
+    backfillAbsentDates().catch(err => console.error('[Auto-Absent] Error:', err));
   }, CHECK_INTERVAL_MS);
 }

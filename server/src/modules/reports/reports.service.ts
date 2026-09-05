@@ -13,23 +13,23 @@ function mapReport(r: any) {
 }
 
 export class ReportsService {
-  static create(userId: string, input: any) {
+  static async create(userId: string, input: any) {
     if (!input.date) throw new AppError(400, 'Date is required');
     const date = input.date.split('T')[0]!;
-    const existing = db.prepare('SELECT id FROM work_reports WHERE user_id = ? AND date = ?').get(userId, date);
+    const existing = await db.prepare('SELECT id FROM work_reports WHERE user_id = ? AND date = ?').get(userId, date);
     if (existing) throw new AppError(409, 'Report already exists for this date');
     const id = uuid();
     try {
-      db.prepare('INSERT INTO work_reports (id, user_id, date, work_completed_today, current_progress, pending_work, blockers, tomorrow_plan, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      await db.prepare('INSERT INTO work_reports (id, user_id, date, work_completed_today, current_progress, pending_work, blockers, tomorrow_plan, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
         .run(id, userId, date, input.workCompletedToday, input.currentProgress ?? 0, input.pendingWork ?? null, input.blockers ?? null, input.tomorrowPlan ?? null, 'draft');
     } catch (err: any) {
-      if (err?.message?.includes('UNIQUE constraint')) throw new AppError(409, 'Report already exists for this date');
+      if (err?.message?.includes('UNIQUE constraint') || err?.message?.includes('Duplicate entry') || err?.message?.includes('ER_DUP_ENTRY')) throw new AppError(409, 'Report already exists for this date');
       throw err;
     }
-    return mapReport(db.prepare('SELECT * FROM work_reports WHERE id = ?').get(id));
+    return mapReport(await db.prepare('SELECT * FROM work_reports WHERE id = ?').get(id));
   }
 
-  static list(input: any, userId: string, role: string) {
+  static async list(input: any, userId: string, role: string) {
     const { page = 1, limit = 20, status, startDate, endDate, userId: filterUserId } = input;
     const offset = (page - 1) * limit;
     const conds: string[] = []; const params: any[] = [];
@@ -41,20 +41,20 @@ export class ReportsService {
     if (endDate) { conds.push('wr.date <= ?'); params.push(endDate); }
 
     const where = conds.length > 0 ? `WHERE ${conds.join(' AND ')}` : '';
-    const count = (db.prepare(`SELECT count(*) as c FROM work_reports wr ${where}`).get(...params) as any).c;
-    const reports = db.prepare(`SELECT wr.*, u.first_name, u.last_name, u.employee_id FROM work_reports wr JOIN users u ON wr.user_id = u.id ${where} ORDER BY wr.date DESC LIMIT ? OFFSET ?`).all(...params, limit, offset);
+    const count = (await db.prepare(`SELECT count(*) as c FROM work_reports wr ${where}`).get(...params) as any).c;
+    const reports = await db.prepare(`SELECT wr.*, u.first_name, u.last_name, u.employee_id FROM work_reports wr JOIN users u ON wr.user_id = u.id ${where} ORDER BY wr.date DESC LIMIT ? OFFSET ?`).all(...params, limit, offset);
     return { reports: reports.map(mapReport), total: count, page, limit };
   }
 
-  static getById(id: string, userId: string, role: string) {
-    const r = db.prepare('SELECT * FROM work_reports WHERE id = ?').get(id) as any;
+  static async getById(id: string, userId: string, role: string) {
+    const r = await db.prepare('SELECT * FROM work_reports WHERE id = ?').get(id) as any;
     if (!r) throw new AppError(404, 'Report not found');
     if (role === 'employee' && r.user_id !== userId) throw new AppError(403, 'Forbidden');
     return mapReport(r);
   }
 
-  static update(id: string, userId: string, input: any) {
-    const report = db.prepare('SELECT * FROM work_reports WHERE id = ?').get(id) as any;
+  static async update(id: string, userId: string, input: any) {
+    const report = await db.prepare('SELECT * FROM work_reports WHERE id = ?').get(id) as any;
     if (!report) throw new AppError(404, 'Report not found');
     if (report.user_id !== userId) throw new AppError(403, 'Cannot update others report');
     if (report.status !== 'draft') throw new AppError(409, 'Only draft reports can be updated');
@@ -65,42 +65,42 @@ export class ReportsService {
     if (input.blockers !== undefined) { sets.push('blockers = ?'); params.push(input.blockers); }
     if (input.tomorrowPlan !== undefined) { sets.push('tomorrow_plan = ?'); params.push(input.tomorrowPlan); }
     params.push(id);
-    db.prepare(`UPDATE work_reports SET ${sets.join(', ')} WHERE id = ?`).run(...params);
-    return mapReport(db.prepare('SELECT * FROM work_reports WHERE id = ?').get(id));
+    await db.prepare(`UPDATE work_reports SET ${sets.join(', ')} WHERE id = ?`).run(...params);
+    return mapReport(await db.prepare('SELECT * FROM work_reports WHERE id = ?').get(id));
   }
 
-  static submit(id: string, userId: string) {
-    return db.transaction(() => {
-      const report = db.prepare('SELECT * FROM work_reports WHERE id = ?').get(id) as any;
+  static async submit(id: string, userId: string) {
+    return await db.transaction(async () => {
+      const report = await db.prepare('SELECT * FROM work_reports WHERE id = ?').get(id) as any;
       if (!report) throw new AppError(404, 'Report not found');
       if (report.user_id !== userId) throw new AppError(403, 'Cannot submit others report');
       if (report.status !== 'draft') throw new AppError(409, 'Only draft reports can be submitted');
-      db.prepare("UPDATE work_reports SET status = 'submitted', updated_at = datetime('now') WHERE id = ?").run(id);
-      const admins = db.prepare("SELECT id FROM users WHERE role IN ('director', 'hr')").all() as any[];
+      await db.prepare("UPDATE work_reports SET status = 'submitted', updated_at = datetime('now') WHERE id = ?").run(id);
+      const admins = await db.prepare("SELECT id FROM users WHERE role IN ('director', 'hr')").all() as any[];
       const insertNotif = db.prepare('INSERT INTO notifications (id, recipient_id, sender_id, title, message, type, link) VALUES (?, ?, ?, ?, ?, ?, ?)');
       for (const a of admins) {
-        insertNotif.run(uuid(), a.id, userId, 'Report Submitted', `Daily report for ${report.date} is pending your review`, 'approval', `/reports/${id}`);
+        await insertNotif.run(uuid(), a.id, userId, 'Report Submitted', `Daily report for ${report.date} is pending your review`, 'approval', `/reports/${id}`);
       }
-      return mapReport(db.prepare('SELECT * FROM work_reports WHERE id = ?').get(id));
+      return mapReport(await db.prepare('SELECT * FROM work_reports WHERE id = ?').get(id));
     })();
   }
 
-  static review(id: string, reviewedById: string, status: string, comments?: string) {
-    return db.transaction(() => {
-      const report = db.prepare('SELECT * FROM work_reports WHERE id = ?').get(id) as any;
+  static async review(id: string, reviewedById: string, status: string, comments?: string) {
+    return await db.transaction(async () => {
+      const report = await db.prepare('SELECT * FROM work_reports WHERE id = ?').get(id) as any;
       if (!report) throw new AppError(404, 'Report not found');
       if (report.status !== 'submitted') throw new AppError(409, 'Report not in reviewable state');
       if (report.user_id === reviewedById) throw new AppError(403, 'Cannot review your own report');
-      db.prepare("UPDATE work_reports SET status = ?, feedback = ?, reviewed_by_id = ?, reviewed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?")
+      await db.prepare("UPDATE work_reports SET status = ?, feedback = ?, reviewed_by_id = ?, reviewed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?")
         .run(status, comments ?? null, reviewedById, id);
-      db.prepare('INSERT INTO notifications (id, recipient_id, sender_id, title, message, type, link) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      await db.prepare('INSERT INTO notifications (id, recipient_id, sender_id, title, message, type, link) VALUES (?, ?, ?, ?, ?, ?, ?)')
         .run(uuid(), report.user_id, reviewedById, `Report ${status}`, `Your daily report has been ${status}`, status === 'approved' ? 'success' : 'warning', `/reports/${id}`);
-      return mapReport(db.prepare('SELECT * FROM work_reports WHERE id = ?').get(id));
+      return mapReport(await db.prepare('SELECT * FROM work_reports WHERE id = ?').get(id));
     })();
   }
 
-  static delete(id: string, userId: string, role?: string) {
-    const report = db.prepare('SELECT * FROM work_reports WHERE id = ?').get(id) as any;
+  static async delete(id: string, userId: string, role?: string) {
+    const report = await db.prepare('SELECT * FROM work_reports WHERE id = ?').get(id) as any;
     if (!report) throw new AppError(404, 'Report not found');
     if (role === 'director' || role === 'hr') {
       // directors and HR can delete any report
@@ -108,19 +108,22 @@ export class ReportsService {
       if (report.user_id !== userId) throw new AppError(403, 'Cannot delete others report');
       if (report.status !== 'draft') throw new AppError(409, 'Only draft reports can be deleted');
     }
-    db.prepare('DELETE FROM work_reports WHERE id = ?').run(id);
+    await db.prepare('DELETE FROM work_reports WHERE id = ?').run(id);
     return { message: 'Report deleted' };
   }
 
-  static getEmployeeSlots() {
-    const rows = db.prepare(`
+  static async getEmployeeSlots() {
+    const rows = await db.prepare(`
       SELECT u.id as user_id, u.first_name, u.last_name, u.employee_id,
         COUNT(wr.id) as total_reports,
         MAX(wr.date) as latest_date,
-        (SELECT wr2.status FROM work_reports wr2 WHERE wr2.user_id = u.id ORDER BY wr2.date DESC LIMIT 1) as latest_status,
-        ROUND(AVG(CASE WHEN wr.date >= date('now', '-30 days') THEN wr.current_progress END), 0) as avg_progress_30d
+        MAX(CASE WHEN wr.date = sub.max_date THEN wr.status END) as latest_status,
+        ROUND(AVG(CASE WHEN wr.date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN wr.current_progress END), 0) as avg_progress_30d
       FROM users u
       LEFT JOIN work_reports wr ON wr.user_id = u.id
+      LEFT JOIN (
+        SELECT user_id, MAX(date) as max_date FROM work_reports GROUP BY user_id
+      ) sub ON sub.user_id = u.id
       WHERE u.status = 'active'
       GROUP BY u.id
       ORDER BY u.first_name
@@ -132,11 +135,11 @@ export class ReportsService {
     }));
   }
 
-  static exportByUser(userId: string, startDate?: string, endDate?: string) {
+  static async exportByUser(userId: string, startDate?: string, endDate?: string) {
     const conds = ['wr.user_id = ?']; const params: any[] = [userId];
     if (startDate) { conds.push('wr.date >= ?'); params.push(startDate); }
     if (endDate) { conds.push('wr.date <= ?'); params.push(endDate); }
     const where = `WHERE ${conds.join(' AND ')}`;
-    return db.prepare(`SELECT wr.*, u.first_name, u.last_name, u.employee_id FROM work_reports wr JOIN users u ON wr.user_id = u.id ${where} ORDER BY wr.date DESC`).all(...params).map(mapReport);
+    return (await db.prepare(`SELECT wr.*, u.first_name, u.last_name, u.employee_id FROM work_reports wr JOIN users u ON wr.user_id = u.id ${where} ORDER BY wr.date DESC`).all(...params)).map(mapReport);
   }
 }

@@ -1,16 +1,15 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
-import { api } from '../lib/api';
-import { listenOnSocket } from '../lib/socket';
 import { getInitials, displayRole } from '../lib/utils';
+import NotificationBell from './NotificationBell';
 import {
   LayoutDashboard, CalendarCheck, ClipboardList, FileText, CalendarDays,
-  Bell, LogOut, Menu, History, Users, Building2, UserCog, BarChart3,
-  Sun, ScrollText, Settings,
+  LogOut, Menu, History, Users, Building2, UserCog, BarChart3,
+  Sun, ScrollText, Settings, FileBadge, Database, FolderOpen, Shield,
 } from 'lucide-react';
 
 const Sidebar = ({ mobile = false, nav, pathname, handleMobileClose, user, logout }: { mobile?: boolean; nav: any[]; pathname: string; handleMobileClose: () => void; user: any; logout: () => void }) => (
@@ -50,7 +49,7 @@ const Sidebar = ({ mobile = false, nav, pathname, handleMobileClose, user, logou
 );
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, loading, logout } = useAuth();
+  const { user, logout } = useAuth();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [pageTitle, setPageTitle] = useState('');
@@ -66,27 +65,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = prevOverflow; };
   }, [mobileOpen]);
-  const [unread, setUnread] = useState(0);
-  const userRef = useRef(user);
-  userRef.current = user;
-
   const isAdmin = user?.role === 'director';
   const isHr = user?.role === 'hr';
   const isAdminOrHr = isAdmin || isHr;
-
-  useEffect(() => {
-    if (!user || loading) return;
-    const fetch = async () => {
-      if (!userRef.current) return;
-      try { const r = await api.get('/notifications?unread=true'); setUnread(r.data.unreadCount ?? 0); } catch { /* ignore */ }
-    };
-    void fetch();
-    const i = setInterval(fetch, 120000);
-    const off = listenOnSocket({
-      'notification:new': () => { void fetch(); },
-    });
-    return () => { clearInterval(i); off(); };
-  }, [user, loading]);
 
   const nav = useMemo(() => [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, show: true },
@@ -95,12 +76,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'Work Plans', href: '/plans', icon: FileText, show: true },
     { name: 'Work Progress', href: '/reports', icon: History, show: true },
     { name: 'Leaves', href: '/leaves', icon: CalendarDays, show: true },
+    { name: 'Documents', href: '/documents', icon: FileBadge, show: true },
+    { name: 'Files', href: '/files', icon: FolderOpen, show: true },
+    { name: 'Employee Database', href: '/employee-database', icon: Database, show: isAdminOrHr },
     { name: 'Team', href: '/team', icon: Users, show: isAdminOrHr },
     { name: 'Holidays', href: '/holidays', icon: Sun, show: isAdminOrHr },
     { name: 'Departments', href: '/departments', icon: Building2, show: isAdminOrHr },
     { name: 'Users', href: '/users', icon: UserCog, show: isAdmin },
     { name: 'Analytics', href: '/analytics', icon: BarChart3, show: isAdminOrHr },
     { name: 'Activity Logs', href: '/logs', icon: ScrollText, show: isAdminOrHr },
+    { name: 'Security', href: '/security', icon: Shield, show: isAdmin },
     { name: 'Profile', href: '/profile', icon: Settings, show: true },
   ], [isAdminOrHr, isAdmin]);
 
@@ -128,10 +113,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <h1 className="text-lg font-bold text-white capitalize truncate">{pageTitle}</h1>
           </div>
           <div className="flex items-center gap-3 flex-shrink-0">
-            <Link href="/notifications" className="relative p-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700 transition" aria-label={`Notifications${unread > 0 ? ` (${unread} unread)` : ''}`}>
-              <Bell className="h-5 w-5" />
-              {unread > 0 && <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-rose-500 text-[10px] font-bold text-white flex items-center justify-center">{unread > 9 ? '9+' : unread}</span>}
-            </Link>
+            <NotificationBell />
             <div className="h-8 w-8 rounded-lg bg-violet-600 flex items-center justify-center font-bold text-white text-xs">{getInitials(user?.firstName, user?.lastName)}</div>
           </div>
         </header>

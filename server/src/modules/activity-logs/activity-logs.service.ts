@@ -7,14 +7,14 @@ function parseJson(raw: string | null): any {
 }
 
 export class ActivityLogsService {
-  static create(userId: string, action: string, entityType?: string, entityId?: string, details?: Record<string, any>, ipAddress?: string) {
+  static async create(userId: string, action: string, entityType?: string, entityId?: string, details?: Record<string, any>, ipAddress?: string) {
     const id = uuid();
-    db.prepare('INSERT INTO activity_logs (id, actor_id, action, entity_type, entity_id, new_values, ip_address) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    await db.prepare('INSERT INTO activity_logs (id, actor_id, action, entity_type, entity_id, new_values, ip_address) VALUES (?, ?, ?, ?, ?, ?, ?)')
       .run(id, userId, action, entityType ?? null, entityId ?? null, details ? JSON.stringify(details) : null, ipAddress ?? null);
-    return this.getById(id);
+    return await this.getById(id);
   }
 
-  static list(input: any) {
+  static async list(input: any) {
     const { page = 1, limit = 20, actorId, entityType, entityId } = input;
     const offset = (page - 1) * limit;
     const conds: string[] = []; const params: any[] = [];
@@ -22,8 +22,8 @@ export class ActivityLogsService {
     if (entityType) { conds.push('al.entity_type = ?'); params.push(entityType); }
     if (entityId) { conds.push('al.entity_id = ?'); params.push(entityId); }
     const where = conds.length > 0 ? `WHERE ${conds.join(' AND ')}` : '';
-    const count = (db.prepare(`SELECT count(*) as c FROM activity_logs al ${where}`).get(...params) as any).c;
-    const logs = db.prepare(`SELECT al.*, u.first_name, u.last_name, u.email, u.employee_id FROM activity_logs al LEFT JOIN users u ON al.actor_id = u.id ${where} ORDER BY al.created_at DESC LIMIT ? OFFSET ?`).all(...params, limit, offset);
+    const count = (await db.prepare(`SELECT count(*) as c FROM activity_logs al ${where}`).get(...params) as any).c;
+    const logs = await db.prepare(`SELECT al.*, u.first_name, u.last_name, u.email, u.employee_id FROM activity_logs al LEFT JOIN users u ON al.actor_id = u.id ${where} ORDER BY al.created_at DESC LIMIT ? OFFSET ?`).all(...params, limit, offset);
     return { logs: logs.map((l: any) => ({
       id: l.id, actorId: l.actor_id, action: l.action, entityType: l.entity_type,
       entityId: l.entity_id, oldValues: parseJson(l.old_values),
@@ -33,8 +33,8 @@ export class ActivityLogsService {
     })), total: count, page, limit };
   }
 
-  static getById(id: string) {
-    const log = db.prepare('SELECT * FROM activity_logs WHERE id = ?').get(id) as any;
+  static async getById(id: string) {
+    const log = await db.prepare('SELECT * FROM activity_logs WHERE id = ?').get(id) as any;
     if (!log) throw new AppError(404, 'Log not found');
     return {
       id: log.id, actorId: log.actor_id, action: log.action, entityType: log.entity_type,

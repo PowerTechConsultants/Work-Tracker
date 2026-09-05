@@ -11,7 +11,7 @@ router.use(authenticate);
 router.get('/', validate(listNotificationsSchema, 'query'), async (req: Request, res: Response, next) => {
   try {
     const { unread, page, limit } = req.query as any;
-    const result = NotificationsService.list(req.user!.sub, { unreadOnly: unread, page, limit });
+    const result = await NotificationsService.list(req.user!.sub, { unreadOnly: unread, page, limit });
     res.json(result);
   } catch (err) { next(err); }
 });

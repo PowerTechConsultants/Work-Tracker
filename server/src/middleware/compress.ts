@@ -21,9 +21,6 @@ export function compressMiddleware() {
     if (res.getHeader('Content-Encoding')) return next();
     if (req.method === 'HEAD') return next();
 
-    const contentType = (res.getHeader('Content-Type') as string) || '';
-    if (!isCompressible(contentType)) return next();
-
     const acceptEncoding = (req.headers['accept-encoding'] as string) || '';
     let encoding: string | null = null;
     if (/\bbr\b/i.test(acceptEncoding)) encoding = 'br';
@@ -32,21 +29,15 @@ export function compressMiddleware() {
     if (!encoding) return next();
 
     const _end = res.end.bind(res);
-    const chunks: Buffer[] = [];
 
-    (res as any).write = (chunk: any) => {
-      if (chunk) chunks.push(Buffer.from(chunk));
-      return true;
-    };
+    (res as any).end = (chunk?: any, cb?: () => void) => {
+      const contentType = (res.getHeader('Content-Type') as string) || '';
+      const body = chunk ? (Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)) : Buffer.alloc(0);
 
-    (res as any).end = (chunk?: any) => {
-      if (chunk) chunks.push(Buffer.from(chunk));
-      const body = Buffer.concat(chunks);
-
-      if (body.length < MIN_COMPRESS_LENGTH) {
+      if (!isCompressible(contentType) || body.length < MIN_COMPRESS_LENGTH) {
         res.removeHeader('Content-Encoding');
         res.setHeader('Content-Length', body.length);
-        return _end(body);
+        return _end(body, cb);
       }
 
       try {
@@ -61,12 +52,12 @@ export function compressMiddleware() {
         res.setHeader('Content-Encoding', encoding);
         res.setHeader('Content-Length', compressed.length);
         res.setHeader('Vary', 'Accept-Encoding');
-        _end(compressed);
+        _end(compressed, cb);
       } catch {
         res.removeHeader('Content-Encoding');
         res.removeHeader('Vary');
         res.setHeader('Content-Length', body.length);
-        _end(body);
+        _end(body, cb);
       }
     };
 

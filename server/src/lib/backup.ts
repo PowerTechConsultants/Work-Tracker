@@ -1,10 +1,9 @@
 import dotenv from 'dotenv';
 dotenv.config();
+import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
-import Database from 'better-sqlite3';
 
-const DB_PATH = process.env.DATABASE_PATH || path.join(process.cwd(), 'data.db');
 const BACKUP_DIR = process.env.BACKUP_DIR || path.join(process.cwd(), 'backup');
 
 function ensureBackupDir() {
@@ -19,22 +18,35 @@ function timestamp(): string {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
 }
 
-// Uses SQLite's online backup API so the snapshot includes data still in the
-// WAL — unlike a raw file copy, this never silently drops recent writes.
 export async function createBackup(prefix = 'employee-tracker'): Promise<string> {
   ensureBackupDir();
-  if (!fs.existsSync(DB_PATH)) {
-    throw new Error(`Database not found at ${DB_PATH}`);
+
+  const url = process.env.DATABASE_URL;
+  let host = process.env.MYSQL_HOST || 'localhost';
+  let port = process.env.MYSQL_PORT || '3306';
+  let user = process.env.MYSQL_USER || 'root';
+  let password = process.env.MYSQL_PASSWORD || '0000';
+  let database = process.env.MYSQL_DATABASE || 'hr';
+  if (url) {
+    try {
+      const u = new URL(url);
+      host = u.hostname || host;
+      port = u.port || port;
+      user = decodeURIComponent(u.username) || user;
+      password = decodeURIComponent(u.password) || password;
+      database = u.pathname.replace(/^\//, '') || database;
+    } catch {}
   }
-  const backupName = `${prefix}-${timestamp()}.db`;
+
+  const backupName = `${prefix}-${timestamp()}.sql`;
   const backupPath = path.join(BACKUP_DIR, backupName);
 
-  const db = new Database(DB_PATH, { readonly: true });
-  try {
-    await db.backup(backupPath);
-  } finally {
-    db.close();
-  }
+  const env = { ...process.env, MYSQL_PWD: password };
+  const sanitize = (v: string) => v.replace(/[^a-zA-Z0-9._@:/-]/g, '');
+  const cmd = `mysqldump -h ${sanitize(host)} -P ${sanitize(port)} -u ${sanitize(user)} --single-transaction --routines --triggers ${sanitize(database)}`;
+  const dump = execSync(cmd, { maxBuffer: 1024 * 1024 * 50, env });
+  fs.writeFileSync(backupPath, dump);
+
   console.log(`[Backup] Created: ${backupPath}`);
   return backupPath;
 }
@@ -42,7 +54,7 @@ export async function createBackup(prefix = 'employee-tracker'): Promise<string>
 export function listBackups(): string[] {
   ensureBackupDir();
   const files = fs.readdirSync(BACKUP_DIR)
-    .filter((f) => f.endsWith('.db'))
+    .filter((f) => f.endsWith('.sql'))
     .sort()
     .reverse();
   return files.map((f) => {
@@ -51,8 +63,7 @@ export function listBackups(): string[] {
   });
 }
 
-// Run directly: npx tsx src/lib/backup.ts [list]
-if (require.main === module) {
+if (process.argv[1] === import.meta.url || process.argv[1]?.endsWith('backup.ts')) {
   const cmd = process.argv[2];
   if (cmd === 'list') {
     const list = listBackups();

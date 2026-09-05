@@ -10,6 +10,15 @@ export interface User {
   status: 'active' | 'inactive' | 'suspended';
   phoneNumber: string | null;
   joiningDate: string | null;
+  dob: string | null;
+  gender: 'male' | 'female' | 'other' | null;
+  fatherName: string | null;
+  nationality: string | null;
+  qualification: string | null;
+  addressStreet: string | null;
+  addressCity: string | null;
+  addressState: string | null;
+  addressPincode: string | null;
   profilePictureUrl: string | null;
 }
 
@@ -126,7 +135,7 @@ export interface WorkReport {
 export interface Leave {
   id: string;
   userId: string;
-  type: 'sick' | 'casual' | 'paid' | 'other';
+  type: 'sick' | 'casual' | 'proposal' | 'other';
   startDate: string;
   endDate: string;
   reason: string | null;
@@ -140,7 +149,7 @@ export interface Leave {
 export interface LeaveBalance {
   sick: number;
   casual: number;
-  paid: number;
+  proposal: number;
   total: number;
 }
 
@@ -261,7 +270,7 @@ export interface AnalyticsLeaveUsage {
   month: string;
   sick: number;
   casual: number;
-  paid: number;
+  proposal: number;
   other: number;
 }
 
@@ -276,4 +285,43 @@ export interface BackupInfo {
   filename: string;
   size: number;
   createdAt: string;
+}
+
+export type DocumentDocType =
+  | 'appointment_letter'
+  | 'experience_certificate'
+  | 'internship_certificate'
+  | 'leaving_certificate'
+  | 'salary_slip';
+
+export interface DocumentRequest {
+  id: string;
+  userId: string;
+  requestedById: string;
+  docType: DocumentDocType;
+  docTypeLabel: string;
+  note: string | null;
+  status: 'pending' | 'issued' | 'rejected' | 'cancelled';
+  rejectReason: string | null;
+  fields: Record<string, unknown> | null;
+  docNumber: string | null;
+  issuedById: string | null;
+  issuedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  firstName: string;
+  lastName: string;
+  employeeId: string;
+  designation: string | null;
+  departmentName: string | null;
+  joiningDate: string | null;
+  issuedByName: string | null;
+}
+
+export interface DocumentsResponse {
+  documents: DocumentRequest[];
+  total: number;
+  page: number;
+  limit: number;
+  pendingCount: number;
 }

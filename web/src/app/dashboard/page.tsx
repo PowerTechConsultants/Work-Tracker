@@ -80,7 +80,7 @@ function EmployeeDashboard({ loading, user }: { loading: boolean; user: any }) {
     enabled: !loading,
   });
   const holidays = holidaysRes?.holidays ?? holidaysRes ?? [];
-  const totalRemaining = (leaveBal?.totalBalance ?? 0) - (leaveBal?.totalUsed ?? 0);
+  const totalRemaining = (leaveBal?.totalAvailable ?? leaveBal?.totalBalance ?? 0) - (leaveBal?.totalUsed ?? 0);
 
   const todayStatusText = todayAtt?.status
     ? dayTypeLabel(todayAtt.status)

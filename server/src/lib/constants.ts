@@ -39,6 +39,7 @@ export const LEAVE_TYPES = {
   SICK: 'sick',
   EARNED: 'earned',
   PAID: 'paid',
+  PROPOSAL: 'proposal',
   UNPAID: 'unpaid',
   MATERNITY: 'maternity',
   PATERNITY: 'paternity',

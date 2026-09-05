@@ -9,7 +9,7 @@ interface StoreOptions {
   windowMs: number;
 }
 
-export class SQLiteStore {
+export class RateLimitStore {
   private windowMs = 60000;
   private keyPrefix: string;
 
@@ -32,16 +32,17 @@ export class SQLiteStore {
   async increment(key: string): Promise<IncrementResponse> {
     const pk = this.prefixed(key);
     try {
-      const now = new Date().toISOString();
-      const existing = db.prepare('SELECT hits, expires_at FROM rate_limits WHERE key = ?').get(pk) as any;
+      const now = new Date().toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
+      const existing = await db.prepare('SELECT hits, expires_at FROM rate_limits WHERE `key` = ?').get(pk) as any;
 
       if (!existing || existing.expires_at <= now) {
         const resetTime = new Date(Date.now() + this.windowMs);
-        db.prepare('INSERT OR REPLACE INTO rate_limits (key, hits, expires_at) VALUES (?, 1, ?)').run(pk, resetTime.toISOString());
+        const resetStr = resetTime.toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
+        await db.prepare('REPLACE INTO rate_limits (`key`, hits, expires_at) VALUES (?, 1, ?)').run(pk, resetStr);
         return { totalHits: 1, resetTime };
       }
 
-      db.prepare('UPDATE rate_limits SET hits = hits + 1 WHERE key = ?').run(pk);
+      await db.prepare('UPDATE rate_limits SET hits = hits + 1 WHERE `key` = ?').run(pk);
       return { totalHits: existing.hits + 1, resetTime: new Date(existing.expires_at) };
     } catch (err) {
       console.error('[RATE-LIMIT] Store unavailable, failing open:', err);
@@ -51,22 +52,70 @@ export class SQLiteStore {
 
   async decrement(key: string): Promise<void> {
     try {
-      db.prepare('UPDATE rate_limits SET hits = MAX(0, hits - 1) WHERE key = ?').run(this.prefixed(key));
+      await db.prepare('UPDATE rate_limits SET hits = GREATEST(0, hits - 1) WHERE `key` = ?').run(this.prefixed(key));
     } catch (err) {
       console.error('[RATE-LIMIT] Store unavailable during decrement:', err);
     }
   }
 
   async resetKey(key: string): Promise<void> {
-    db.prepare('DELETE FROM rate_limits WHERE key = ?').run(this.prefixed(key));
+    await db.prepare('DELETE FROM rate_limits WHERE `key` = ?').run(this.prefixed(key));
   }
 
   async resetAll(): Promise<void> {
-    db.prepare('DELETE FROM rate_limits').run();
+    await db.prepare('DELETE FROM rate_limits').run();
   }
 
-  static resetExpired(): void {
-    const now = new Date().toISOString();
-    db.prepare('DELETE FROM rate_limits WHERE expires_at < ?').run(now);
+  static async resetExpired(): Promise<void> {
+    const now = new Date().toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
+    await db.prepare('DELETE FROM rate_limits WHERE expires_at < ?').run(now);
+  }
+}
+
+export class SlidingWindowRateLimiter {
+  private store: Map<string, { attempts: number[] }> = new Map();
+  private cleanupInterval: ReturnType<typeof setInterval>;
+
+  constructor() {
+    this.cleanupInterval = setInterval(() => this.cleanup(), 60_000);
+  }
+
+  private cleanup(): void {
+    const now = Date.now();
+    for (const [key, entry] of this.store) {
+      entry.attempts = entry.attempts.filter(t => now - t < 3600_000);
+      if (entry.attempts.length === 0) this.store.delete(key);
+    }
+  }
+
+  async increment(key: string, windowMs: number, maxAttempts: number): Promise<{ allowed: boolean; retryAfterMs: number; attempts: number }> {
+    const now = Date.now();
+    const entry = this.store.get(key) || { attempts: [] };
+    entry.attempts = entry.attempts.filter(t => now - t < windowMs);
+
+    if (entry.attempts.length >= maxAttempts) {
+      const oldestAttempt = entry.attempts[0]!;
+      const retryAfterMs = windowMs - (now - oldestAttempt);
+      return { allowed: false, retryAfterMs, attempts: entry.attempts.length };
+    }
+
+    entry.attempts.push(now);
+    this.store.set(key, entry);
+    return { allowed: true, retryAfterMs: 0, attempts: entry.attempts.length };
+  }
+
+  async getAttempts(key: string, windowMs: number): Promise<number> {
+    const now = Date.now();
+    const entry = this.store.get(key) || { attempts: [] };
+    entry.attempts = entry.attempts.filter(t => now - t < windowMs);
+    if (entry.attempts.length === 0) {
+      this.store.delete(key);
+      return 0;
+    }
+    return entry.attempts.length;
+  }
+
+  async reset(key: string): Promise<void> {
+    this.store.delete(key);
   }
 }

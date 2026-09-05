@@ -15,7 +15,7 @@ Employee Work Tracker is a full-stack workforce management application designed 
 
 ## Database Schema
 
-SQLite with 16 tables:
+SQLite with 17 tables:
 
 - **users** — Employee records with roles (admin/hr/employee), status, login tracking, lockout
 - **departments** — Department hierarchy with manager assignment
@@ -30,6 +30,7 @@ SQLite with 16 tables:
 - **work_plans** — Daily work plans with review workflow
 - **work_reports** — End-of-day work reports with review workflow
 - **leaves** — Leave applications (sick/casual/annual/other) with approval workflow
+- **document_requests** — Employee document requests (appointment letter, experience/internship/leaving certificate, salary slip) with HR/Admin fill-and-issue workflow, per-type template fields (JSON), generated document numbers and issue tracking
 - **holidays** — Company holidays (all-employees or per-user assignment)
 - **holiday_assignees** — Per-user holiday mapping
 - **notifications** — In-app notification system

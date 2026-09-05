@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { X, FileText, FileSpreadsheet, Download } from 'lucide-react';
-import { formatDate, formatDateTime, exportToCSV, exportToExcel, exportToPDF } from '@/lib/utils';
+import { formatDate, formatDateTime, exportToCSV, exportToPDF } from '@/lib/utils';
 
 export interface ExportColumn {
   id: string;
@@ -155,8 +155,14 @@ export default function ExportDialog({ isOpen, onClose, data, columns, filename,
       const { exportMultiSheetExcel } = await import('@/lib/utils');
       await exportMultiSheetExcel(sections, filename);
     } else if (format === 'csv') {
-      // For CSV, concatenate all sections with section headers
-      exportToCSV(mainRows, filename, mainHeaders);
+      const allRows = [...mainRows];
+      const allHeaders = [...mainHeaders];
+      extraData.forEach((e) => {
+        if (e.rows.length > 0) {
+          allRows.push(...e.rows);
+        }
+      });
+      exportToCSV(allRows, filename, allHeaders);
     } else {
       await exportToPDF(mainRows, filename, mainHeaders, title);
     }

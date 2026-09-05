@@ -1,5 +1,5 @@
 import db, { uuid } from '../../db';
-import { getISTDate } from '../../lib/time';
+import { getISTDate, parseUTC } from '../../lib/time';
 import { getIO } from '../../lib/socket';
 import { cache } from '../../lib/cache';
 import { AppError } from '../../lib/app-error';
@@ -23,13 +23,13 @@ function emitAttendanceUpdated(userId: string, record: any) {
   }
 }
 
-function logEvent(attendanceId: string, userId: string, eventType: string, loc?: { latitude?: number; longitude?: number; accuracy?: number; locationCapturedAt?: string }, occurredAt?: string) {
+async function logEvent(attendanceId: string, userId: string, eventType: string, loc?: { latitude?: number; longitude?: number; accuracy?: number; locationCapturedAt?: string }, occurredAt?: string) {
   try {
-    db.prepare(
+    await db.prepare(
       "INSERT INTO attendance_events (id, attendance_id, user_id, event_type, occurred_at, latitude, longitude, location_accuracy, location_captured_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).run(
       uuid(), attendanceId, userId, eventType,
-      occurredAt ?? new Date().toISOString(),
+      occurredAt ?? new Date().toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, ''),
       loc?.latitude ?? null, loc?.longitude ?? null, loc?.accuracy ?? null, loc?.locationCapturedAt ?? null
     );
   } catch (e) {
@@ -37,25 +37,25 @@ function logEvent(attendanceId: string, userId: string, eventType: string, loc?:
   }
 }
 
-export function getAttendanceEvents(attendanceId: string): any[] {
-  return db.prepare(
+export async function getAttendanceEvents(attendanceId: string): Promise<any[]> {
+  return await db.prepare(
     "SELECT id, event_type, occurred_at, latitude, longitude, location_accuracy, location_captured_at FROM attendance_events WHERE attendance_id = ? ORDER BY occurred_at ASC"
   ).all(attendanceId);
 }
 
-export function getAttendanceEventsForUser(userId: string, attendanceId: string): any[] {
-  return db.prepare(
+export async function getAttendanceEventsForUser(userId: string, attendanceId: string): Promise<any[]> {
+  return await db.prepare(
     "SELECT id, event_type, occurred_at, latitude, longitude, location_accuracy, location_captured_at FROM attendance_events WHERE attendance_id = ? AND user_id = ? ORDER BY occurred_at ASC"
   ).all(attendanceId, userId);
 }
 
-export function getPauseLog(startDate?: string, endDate?: string): any[] {
+export async function getPauseLog(startDate?: string, endDate?: string): Promise<any[]> {
   const conds: string[] = ["ae.event_type IN ('pause_start', 'pause_end')"];
   const params: any[] = [];
   if (startDate) { conds.push('a.date >= ?'); params.push(startDate); }
   if (endDate) { conds.push('a.date <= ?'); params.push(endDate); }
   const where = conds.length > 0 ? `WHERE ${conds.join(' AND ')}` : '';
-  return db.prepare(`
+  return await db.prepare(`
     SELECT ae.event_type, ae.occurred_at, a.id as attendance_id, a.date,
            a.user_id, u.first_name, u.last_name, u.employee_id, d.name as department_name
     FROM attendance_events ae
@@ -68,26 +68,26 @@ export function getPauseLog(startDate?: string, endDate?: string): any[] {
 }
 
 export class AttendanceService {
-  static checkIn(userId: string, input: { status?: string; notes?: string; latitude?: number; longitude?: number; accuracy?: number; locationCapturedAt?: string }) {
+  static async checkIn(userId: string, input: { status?: string; notes?: string; latitude?: number; longitude?: number; accuracy?: number; locationCapturedAt?: string }) {
     const today = getISTDate();
     const id = uuid();
-    const now = new Date().toISOString();
+    const now = new Date().toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
     const hasLocation = input.latitude !== undefined && input.longitude !== undefined;
 
     // Check if record exists (e.g., from approved leave or holiday)
-    const existing = db.prepare('SELECT * FROM attendance WHERE user_id = ? AND date = ?').get(userId, today) as any;
+    const existing = await db.prepare('SELECT * FROM attendance WHERE user_id = ? AND date = ?').get(userId, today) as any;
     if (existing) {
       if (existing.logout_time) throw new AppError(409, 'Already checked out today');
       if (existing.status === 'holiday') throw new AppError(403, 'Cannot check in on a holiday');
       if (existing.status === 'absent' || existing.status === 'leave') {
         if (hasLocation) {
-          db.prepare("UPDATE attendance SET status = 'present', login_time = ?, notes = ?, latitude = ?, longitude = ?, location_accuracy = ?, location_captured_at = ?, updated_at = ? WHERE id = ?")
+          await db.prepare("UPDATE attendance SET status = 'present', login_time = ?, notes = ?, latitude = ?, longitude = ?, location_accuracy = ?, location_captured_at = ?, updated_at = ? WHERE id = ?")
             .run(now, input.notes ?? null, input.latitude, input.longitude, input.accuracy ?? null, input.locationCapturedAt ?? now, now, existing.id);
         } else {
-          db.prepare("UPDATE attendance SET status = 'present', login_time = ?, notes = ?, updated_at = ? WHERE id = ?")
+          await db.prepare("UPDATE attendance SET status = 'present', login_time = ?, notes = ?, updated_at = ? WHERE id = ?")
             .run(now, input.notes ?? null, now, existing.id);
         }
-        const rec = db.prepare('SELECT * FROM attendance WHERE id = ?').get(existing.id);
+        const rec = await db.prepare('SELECT * FROM attendance WHERE id = ?').get(existing.id);
         logEvent(existing.id, userId, 'check_in', { latitude: input.latitude, longitude: input.longitude, accuracy: input.accuracy, locationCapturedAt: input.locationCapturedAt }, now);
         invalidateAnalyticsCache();
         emitAttendanceUpdated(userId, rec);
@@ -98,73 +98,73 @@ export class AttendanceService {
 
     try {
       if (hasLocation) {
-        db.prepare("INSERT INTO attendance (id, user_id, date, status, login_time, notes, latitude, longitude, location_accuracy, location_captured_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        await db.prepare("INSERT INTO attendance (id, user_id, date, status, login_time, notes, latitude, longitude, location_accuracy, location_captured_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
           .run(id, userId, today, input.status ?? 'present', now, input.notes ?? null, input.latitude, input.longitude, input.accuracy ?? null, input.locationCapturedAt ?? now);
       } else {
-        db.prepare("INSERT INTO attendance (id, user_id, date, status, login_time, notes) VALUES (?, ?, ?, ?, ?, ?)")
+        await db.prepare("INSERT INTO attendance (id, user_id, date, status, login_time, notes) VALUES (?, ?, ?, ?, ?, ?)")
           .run(id, userId, today, input.status ?? 'present', now, input.notes ?? null);
       }
     } catch (err: any) {
-      if (err.message?.includes('UNIQUE constraint')) throw new AppError(409, 'Already checked in today');
+      if (err.message?.includes('UNIQUE constraint') || err.message?.includes('Duplicate entry') || err.message?.includes('ER_DUP_ENTRY')) throw new AppError(409, 'Already checked in today');
       throw err;
     }
-    const rec = db.prepare('SELECT * FROM attendance WHERE id = ?').get(id);
+    const rec = await db.prepare('SELECT * FROM attendance WHERE id = ?').get(id);
     logEvent(id, userId, 'check_in', { latitude: input.latitude, longitude: input.longitude, accuracy: input.accuracy, locationCapturedAt: input.locationCapturedAt }, now);
     invalidateAnalyticsCache();
     emitAttendanceUpdated(userId, rec);
     return rec;
   }
 
-  static startPause(userId: string, input?: { latitude?: number; longitude?: number; accuracy?: number; locationCapturedAt?: string }) {
+  static async startPause(userId: string, input?: { latitude?: number; longitude?: number; accuracy?: number; locationCapturedAt?: string }) {
     const today = getISTDate();
-    const rec = db.prepare('SELECT * FROM attendance WHERE user_id = ? AND date = ?').get(userId, today) as any;
+    const rec = await db.prepare('SELECT * FROM attendance WHERE user_id = ? AND date = ?').get(userId, today) as any;
     if (!rec) throw new AppError(404, 'No check-in found for today');
     if (rec.logout_time) throw new AppError(409, 'Already checked out today');
     if (rec.pause_start_time && !rec.pause_end_time) return rec;
 
-    const now = new Date().toISOString();
-    db.prepare("UPDATE attendance SET pause_start_time = ?, pause_end_time = NULL, status = 'on_break', updated_at = ? WHERE id = ?").run(now, now, rec.id);
+    const now = new Date().toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
+    await db.prepare("UPDATE attendance SET pause_start_time = ?, pause_end_time = NULL, status = 'on_break', updated_at = ? WHERE id = ?").run(now, now, rec.id);
     logEvent(rec.id, userId, 'pause_start', input, now);
-    const updated = db.prepare('SELECT * FROM attendance WHERE id = ?').get(rec.id);
+    const updated = await db.prepare('SELECT * FROM attendance WHERE id = ?').get(rec.id);
     invalidateAnalyticsCache();
     emitAttendanceUpdated(userId, updated);
     return updated;
   }
 
-  static endPause(userId: string, input?: { latitude?: number; longitude?: number; accuracy?: number; locationCapturedAt?: string }) {
+  static async endPause(userId: string, input?: { latitude?: number; longitude?: number; accuracy?: number; locationCapturedAt?: string }) {
     const today = getISTDate();
-    const rec = db.prepare('SELECT * FROM attendance WHERE user_id = ? AND date = ?').get(userId, today) as any;
+    const rec = await db.prepare('SELECT * FROM attendance WHERE user_id = ? AND date = ?').get(userId, today) as any;
     if (!rec) throw new AppError(404, 'No check-in found for today');
     if (!rec.pause_start_time || rec.pause_end_time) return rec;
 
     const now = new Date();
-    const pauseStart = new Date(rec.pause_start_time);
+    const pauseStart = parseUTC(rec.pause_start_time);
     const pauseDuration = Math.round((now.getTime() - pauseStart.getTime()) / 60000);
     const totalPause = (rec.pause_minutes ?? 0) + pauseDuration;
-    const nowIso = now.toISOString();
+    const nowIso = now.toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
 
-    db.prepare("UPDATE attendance SET pause_end_time = ?, pause_minutes = ?, status = 'present', updated_at = ? WHERE id = ?")
+    await db.prepare("UPDATE attendance SET pause_end_time = ?, pause_minutes = ?, status = 'present', updated_at = ? WHERE id = ?")
       .run(nowIso, totalPause, nowIso, rec.id);
     logEvent(rec.id, userId, 'pause_end', input, nowIso);
-    const updated = db.prepare('SELECT * FROM attendance WHERE id = ?').get(rec.id);
+    const updated = await db.prepare('SELECT * FROM attendance WHERE id = ?').get(rec.id);
     invalidateAnalyticsCache();
     emitAttendanceUpdated(userId, updated);
     return updated;
   }
 
-  static checkOut(userId: string, input?: { latitude?: number; longitude?: number; accuracy?: number; locationCapturedAt?: string }) {
+  static async checkOut(userId: string, input?: { latitude?: number; longitude?: number; accuracy?: number; locationCapturedAt?: string }) {
     const today = getISTDate();
-    const rec = db.prepare('SELECT * FROM attendance WHERE user_id = ? AND date = ?').get(userId, today) as any;
+    const rec = await db.prepare('SELECT * FROM attendance WHERE user_id = ? AND date = ?').get(userId, today) as any;
     if (!rec) throw new AppError(404, 'No check-in found for today');
     if (rec.logout_time) throw new AppError(409, 'Already checked out today');
 
     const now = new Date();
-    const nowIso = now.toISOString();
-    const loginTime = rec.login_time ? new Date(rec.login_time) : now;
+    const nowIso = now.toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
+    const loginTime = rec.login_time ? parseUTC(rec.login_time) : now;
 
     let pauseMinutes = rec.pause_minutes ?? 0;
     if (rec.pause_start_time && !rec.pause_end_time) {
-      const pauseStart = new Date(rec.pause_start_time);
+      const pauseStart = parseUTC(rec.pause_start_time);
       pauseMinutes += Math.round((now.getTime() - pauseStart.getTime()) / 60000);
     }
 
@@ -175,20 +175,20 @@ export class AttendanceService {
     const overtimeHours = Math.max(0, Math.round((workingHours - STANDARD_WORKDAY_HOURS) * 100) / 100);
     const status = workingHours < HALF_DAY_THRESHOLD ? 'half_day' : 'work_end';
 
-    db.prepare(`UPDATE attendance SET
+    await db.prepare(`UPDATE attendance SET
       logout_time = ?, working_hours = ?, overtime_hours = ?,
       pause_minutes = ?, pause_end_time = COALESCE(pause_end_time, ?),
       status = ?, updated_at = ? WHERE id = ?`)
       .run(nowIso, workingHours, overtimeHours, pauseMinutes, rec.pause_start_time ? nowIso : null, status, nowIso, rec.id);
 
-    const updated = db.prepare('SELECT * FROM attendance WHERE id = ?').get(rec.id);
+    const updated = await db.prepare('SELECT * FROM attendance WHERE id = ?').get(rec.id);
     logEvent(rec.id, userId, 'check_out', input, nowIso);
     invalidateAnalyticsCache();
     emitAttendanceUpdated(userId, updated);
     return updated;
   }
 
-  static list(input: any) {
+  static async list(input: any) {
     const { page = 1, limit = 20, userId, userIds, startDate, endDate, status, statuses } = input;
     const offset = (page - 1) * limit;
     const conds: string[] = []; const params: any[] = [];
@@ -207,19 +207,19 @@ export class AttendanceService {
     if (startDate) { conds.push('a.date >= ?'); params.push(startDate); }
     if (endDate) { conds.push('a.date <= ?'); params.push(endDate); }
     const where = conds.length > 0 ? `WHERE ${conds.join(' AND ')}` : '';
-    const count = (db.prepare(`SELECT count(*) as c FROM attendance a ${where}`).get(...params) as any).c;
-    const rows = db.prepare(`SELECT a.*, u.first_name, u.last_name, u.employee_id, d.name as department_name FROM attendance a JOIN users u ON a.user_id = u.id LEFT JOIN departments d ON u.department_id = d.id ${where} ORDER BY a.date DESC LIMIT ? OFFSET ?`).all(...params, limit, offset);
+    const count = (await db.prepare(`SELECT count(*) as c FROM attendance a ${where}`).get(...params) as any).c;
+    const rows = await db.prepare(`SELECT a.*, u.first_name, u.last_name, u.employee_id, d.name as department_name FROM attendance a JOIN users u ON a.user_id = u.id LEFT JOIN departments d ON u.department_id = d.id ${where} ORDER BY a.date DESC LIMIT ? OFFSET ?`).all(...params, limit, offset);
     return { records: rows, total: count, page, limit };
   }
 
-  static getTodayStatus(userId: string) {
+  static async getTodayStatus(userId: string) {
     const today = getISTDate();
-    return db.prepare('SELECT id, user_id, date, status, login_time, logout_time, working_hours, overtime_hours, pause_minutes, latitude, longitude, location_accuracy, location_captured_at, notes, created_at, updated_at FROM attendance WHERE user_id = ? AND date = ?').get(userId, today) ?? null;
+    return await db.prepare('SELECT id, user_id, date, status, login_time, logout_time, working_hours, overtime_hours, pause_minutes, latitude, longitude, location_accuracy, location_captured_at, notes, created_at, updated_at FROM attendance WHERE user_id = ? AND date = ?').get(userId, today) ?? null;
   }
 
-  static getTodayAll() {
+  static async getTodayAll() {
     const today = getISTDate();
-    const rows = db.prepare(`
+    const rows = await db.prepare(`
       SELECT u.id, u.first_name, u.last_name, u.employee_id, u.role,
              a.status as today_status, a.login_time, a.logout_time, a.working_hours, a.overtime_hours, a.pause_minutes,
              a.latitude, a.longitude, a.location_accuracy, a.location_captured_at
@@ -231,18 +231,18 @@ export class AttendanceService {
     return rows;
   }
 
-  static getUserHistory(userId: string, year: number, month: number, startDate?: string, endDate?: string) {
+  static async getUserHistory(userId: string, year: number, month: number, startDate?: string, endDate?: string) {
     const start = startDate || `${year}-${String(month).padStart(2, '0')}-01`;
     const end = endDate || (() => {
       const lastDay = new Date(year, month, 0).getDate();
       return `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
     })();
 
-    const records = db.prepare(`
+    const records = await db.prepare(`
       SELECT id, user_id, date, status, login_time, logout_time, working_hours, overtime_hours, pause_start_time, pause_end_time, pause_minutes, latitude, longitude, location_accuracy, location_captured_at, notes, created_at, updated_at FROM attendance WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date DESC
     `).all(userId, start, end);
 
-    const agg = db.prepare(`SELECT
+    const agg = await db.prepare(`SELECT
       COALESCE(SUM(working_hours), 0) as total_working_hours,
       COALESCE(SUM(overtime_hours), 0) as total_overtime_hours,
       COALESCE(SUM(pause_minutes), 0) as total_pause_minutes
@@ -259,7 +259,7 @@ export class AttendanceService {
     };
   }
 
-  static bulkDelete(input: any) {
+  static async bulkDelete(input: any) {
     const normalizedDate = input.date ? input.date : null;
     const startDate = input.startDate ?? (normalizedDate ? normalizedDate : undefined);
     const endDate = input.endDate ?? (normalizedDate ? normalizedDate : undefined);
@@ -289,13 +289,14 @@ export class AttendanceService {
     }
 
     const where = conds.length > 0 ? `WHERE ${conds.join(' AND ')}` : '';
-    const count = (db.prepare(`SELECT COUNT(*) as c FROM attendance ${where}`).get(...params) as any).c;
+    const count = (await db.prepare(`SELECT COUNT(*) as c FROM attendance ${where}`).get(...params) as any).c;
 
     let deleted = 0;
     if (count > 0) {
-      db.transaction(() => {
-        deleted = db.prepare(`DELETE FROM attendance ${where}`).run(...params).changes;
+      const result = await db.transaction(async () => {
+        return await db.prepare(`DELETE FROM attendance ${where}`).run(...params);
       })();
+      deleted = result.changes;
     }
     const result = { deleted, scope: { userId: input.userId ?? null, userIds: input.userIds ?? null, status: input.status ?? null, startDate: startDate ?? null, endDate: endDate ?? null, date: normalizedDate } };
     invalidateAnalyticsCache();
@@ -307,8 +308,8 @@ export class AttendanceService {
     return result;
   }
 
-  static update(id: string, input: any) {
-    if (!db.prepare('SELECT id FROM attendance WHERE id = ?').get(id)) throw new AppError(404, 'Record not found');
+  static async update(id: string, input: any) {
+    if (!await db.prepare('SELECT id FROM attendance WHERE id = ?').get(id)) throw new AppError(404, 'Record not found');
     const sets: string[] = ["updated_at = datetime('now')"]; const params: any[] = [];
     if (input.status) { sets.push('status = ?'); params.push(input.status); }
     if (input.loginTime) { sets.push('login_time = ?'); params.push(input.loginTime); }
@@ -333,20 +334,20 @@ export class AttendanceService {
     if (input.accuracy !== undefined) { sets.push('location_accuracy = ?'); params.push(input.accuracy); }
     if (input.locationCapturedAt !== undefined) { sets.push('location_captured_at = ?'); params.push(input.locationCapturedAt); }
     params.push(id);
-    db.prepare(`UPDATE attendance SET ${sets.join(', ')} WHERE id = ?`).run(...params);
-    return db.prepare('SELECT * FROM attendance WHERE id = ?').get(id);
+    await db.prepare(`UPDATE attendance SET ${sets.join(', ')} WHERE id = ?`).run(...params);
+    return await db.prepare('SELECT * FROM attendance WHERE id = ?').get(id);
   }
 
-  static getMonthlySummary(userId: string, year: number, month: number) {
+  static async getMonthlySummary(userId: string, year: number, month: number) {
     const start = `${year}-${String(month).padStart(2, '0')}-01`;
     const lastDay = new Date(year, month, 0).getDate();
     const end = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
-    const statusRows = db.prepare('SELECT status, count(*) as count FROM attendance WHERE user_id = ? AND date >= ? AND date <= ? GROUP BY status').all(userId, start, end) as any[];
+    const statusRows = await db.prepare('SELECT status, count(*) as count FROM attendance WHERE user_id = ? AND date >= ? AND date <= ? GROUP BY status').all(userId, start, end) as any[];
     const summary: Record<string, number> = {};
     for (const r of statusRows) summary[r.status] = r.count;
 
-    const agg = db.prepare(`SELECT
+    const agg = await db.prepare(`SELECT
       COALESCE(SUM(working_hours), 0) as total_working_hours,
       COALESCE(SUM(overtime_hours), 0) as total_overtime_hours,
       COALESCE(SUM(pause_minutes), 0) as total_pause_minutes

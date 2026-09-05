@@ -53,7 +53,7 @@ export default function HolidaysPage() {
   });
 
   const deleteHoliday = useMutation({
-    mutationFn: async (id: string) => (await api.delete(`/holidays/${id}`)).data,
+    mutationFn: async (id: string) => (await api.delete(`/holidays/${id}`, { data: { confirm: 'DELETE' } })).data,
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: ['holidays'] });
       const prev = qc.getQueryData(['holidays']);

@@ -48,4 +48,47 @@ router.get('/overtime', apiCache({ ttl: 120_000 }), async (req: Request, res: Re
   } catch (err) { next(err); }
 });
 
+router.get('/productivity', apiCache({ ttl: 60_000 }), async (req: Request, res: Response, next) => {
+  try {
+    const { userId, startDate, endDate } = req.query;
+    const data = await AnalyticsService.productivity(
+      userId as string | undefined,
+      startDate as string | undefined,
+      endDate as string | undefined,
+    );
+    res.json(data);
+  } catch (err) { next(err); }
+});
+
+router.get('/department-performance', apiCache({ ttl: 60_000 }), async (_req: Request, res: Response, next) => {
+  try {
+    const data = await AnalyticsService.departmentPerformance();
+    res.json(data);
+  } catch (err) { next(err); }
+});
+
+router.get('/employee-productivity', apiCache({ ttl: 60_000 }), async (req: Request, res: Response, next) => {
+  try {
+    const { departmentId, period } = req.query;
+    const validPeriod = ['week', 'month', 'quarter', 'year'].includes(period as string) ? (period as string) : 'month';
+    const data = await AnalyticsService.employeeProductivity(
+      departmentId as string | undefined,
+      validPeriod,
+    );
+    res.json(data);
+  } catch (err) { next(err); }
+});
+
+router.get('/manager-dashboard', apiCache({ ttl: 60_000 }), async (req: Request, res: Response, next) => {
+  try {
+    const { managerId } = req.query;
+    if (!managerId) {
+      res.status(400).json({ error: 'managerId is required' });
+      return;
+    }
+    const data = await AnalyticsService.managerDashboard(managerId as string);
+    res.json(data);
+  } catch (err) { next(err); }
+});
+
 export default router;

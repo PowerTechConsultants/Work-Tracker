@@ -9,15 +9,50 @@ import { parseUTC } from '../../lib/time';
 import { nextEmployeeId } from '../users/users.service';
 import { AppError } from '../../lib/app-error';
 import { bcryptBreaker } from '../../lib/circuit-breaker';
-import { sendPasswordResetEmail, isEmailConfigured } from '../../lib/email';
+import { sendPasswordResetEmail, isEmailConfigured, sendSecurityAlertEmail } from '../../lib/email';
 import { verifyTOTP } from '../../lib/totp';
+import { getPasswordPolicy, validatePassword, checkPasswordHistory, recordPassword, isPasswordExpired } from '../../lib/password-policy';
+import { SlidingWindowRateLimiter } from '../../lib/rate-limit-store';
 
 const SALT_ROUNDS = 12;
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOCKOUT_MINUTES = 15;
+const IP_WINDOW_MS = 15 * 60 * 1000;
+const IP_MAX_ATTEMPTS = 10;
+const EMAIL_WINDOW_MS = 15 * 60 * 1000;
+const EMAIL_MAX_ATTEMPTS = 5;
+const PROGRESSIVE_DELAY_THRESHOLD = 3;
+const PROGRESSIVE_DELAY_MS = 1000;
+const SECURITY_ALERT_THRESHOLD = 3;
+
+const ipLimiter = new SlidingWindowRateLimiter();
+const emailLimiter = new SlidingWindowRateLimiter();
 
 export class AuthService {
   static async login(input: { email: string; password: string; pendingAuthToken?: string; twoFactorCode?: string }, userAgent?: string, ip?: string) {
     const email = input.email.toLowerCase().trim();
-    const user = db.prepare('SELECT id, email, password_hash, role, status, employee_id, first_name, last_name, designation, department_id, phone_number, joining_date, profile_picture_url, failed_login_attempts, locked_until, two_factor_enabled, two_factor_secret FROM users WHERE email = ?').get(email) as any;
+
+    // Sliding window rate limit by IP
+    const ipKey = `login:ip:${ip ?? 'unknown'}`;
+    const ipResult = await ipLimiter.increment(ipKey, IP_WINDOW_MS, IP_MAX_ATTEMPTS);
+    if (!ipResult.allowed) {
+      throw new AppError(429, `Too many login attempts from this IP. Retry after ${Math.ceil(ipResult.retryAfterMs / 1000)} seconds`);
+    }
+
+    // Sliding window rate limit by email
+    const emailKey = `login:email:${email}`;
+    const emailResult = await emailLimiter.increment(emailKey, EMAIL_WINDOW_MS, EMAIL_MAX_ATTEMPTS);
+    if (!emailResult.allowed) {
+      throw new AppError(429, `Too many login attempts for this account. Retry after ${Math.ceil(emailResult.retryAfterMs / 1000)} seconds`);
+    }
+
+    // Progressive delay after threshold
+    if (emailResult.attempts > PROGRESSIVE_DELAY_THRESHOLD) {
+      const delayMs = (emailResult.attempts - PROGRESSIVE_DELAY_THRESHOLD) * PROGRESSIVE_DELAY_MS;
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+
+    const user = await db.prepare('SELECT id, email, password_hash, role, status, employee_id, first_name, last_name, designation, department_id, phone_number, joining_date, profile_picture_url, failed_login_attempts, locked_until, two_factor_enabled, two_factor_secret FROM users WHERE email = ?').get(email) as any;
     if (!user) throw new AppError(401, 'Invalid credentials');
     if (user.status !== 'active') throw new AppError(403, 'Account is not active');
     if (user.locked_until && parseUTC(user.locked_until) > new Date()) {
@@ -30,9 +65,12 @@ export class AuthService {
 
     const passwordValid = await bcryptBreaker.call(() => bcrypt.compare(input.password, user.password_hash));
     if (!passwordValid) {
-      AuthService.recordFailedAttempt(user);
+      await AuthService.recordFailedAttempt(user, email, ip);
       throw new AppError(401, 'Invalid credentials');
     }
+
+    // Reset rate limiters on success
+    await emailLimiter.reset(emailKey);
 
     return AuthService.issueSession(user, userAgent, ip);
   }
@@ -48,16 +86,19 @@ export class AuthService {
 
       const valid = await verifyTOTP({ secret: user.two_factor_secret, token: code });
       if (!valid) {
-        AuthService.recordFailedAttempt(user);
+        await AuthService.recordFailedAttempt(user, input.email, ip);
         throw new AppError(401, 'Invalid two-factor code');
       }
+
+      const emailKey = `login:email:${input.email.toLowerCase().trim()}`;
+      await emailLimiter.reset(emailKey);
 
       return AuthService.issueSession(user, userAgent, ip);
     }
 
     const passwordValid = await bcryptBreaker.call(() => bcrypt.compare(input.password, user.password_hash));
     if (!passwordValid) {
-      AuthService.recordFailedAttempt(user);
+      await AuthService.recordFailedAttempt(user, input.email, ip);
       throw new AppError(401, 'Invalid credentials');
     }
 
@@ -68,13 +109,22 @@ export class AuthService {
     };
   }
 
-  private static recordFailedAttempt(user: any) {
-    const attempts = user.failed_login_attempts + 1;
-    if (attempts >= config.maxLoginAttempts) {
-      db.prepare("UPDATE users SET failed_login_attempts = ?, locked_until = datetime('now', '+' || ? || ' minutes') WHERE id = ?")
-        .run(attempts, config.lockoutMinutes, user.id);
+  private static async recordFailedAttempt(user: any, email: string, ip?: string) {
+    // Send security alert after threshold
+    if (user.failed_login_attempts + 1 >= SECURITY_ALERT_THRESHOLD) {
+      const emailKey = `login:email:${email}`;
+      const emailAttempts = await emailLimiter.getAttempts(emailKey, EMAIL_WINDOW_MS);
+      if (emailAttempts >= SECURITY_ALERT_THRESHOLD) {
+        sendSecurityAlertEmail((user.email as string) ?? email, ip).catch(e => console.error('[AUTH] Security alert email failed:', e));
+      }
+    }
+
+    // Atomic increment to avoid TOCTOU race condition
+    if (user.failed_login_attempts + 1 >= MAX_LOGIN_ATTEMPTS) {
+      await db.prepare("UPDATE users SET failed_login_attempts = failed_login_attempts + 1, locked_until = datetime('now', '+' || ? || ' minutes') WHERE id = ?")
+        .run(LOCKOUT_MINUTES, user.id);
     } else {
-      db.prepare('UPDATE users SET failed_login_attempts = ? WHERE id = ?').run(attempts, user.id);
+      await db.prepare('UPDATE users SET failed_login_attempts = failed_login_attempts + 1 WHERE id = ?').run(user.id);
     }
   }
 
@@ -87,27 +137,31 @@ export class AuthService {
     };
   }
 
-  private static issueSession(user: any, userAgent?: string, ip?: string) {
-    return db.transaction(() => {
-      db.prepare("UPDATE users SET failed_login_attempts = 0, locked_until = NULL, last_login_at = datetime('now') WHERE id = ?").run(user.id);
+  private static async issueSession(user: any, userAgent?: string, ip?: string) {
+    return await db.transaction(async () => {
+      await db.prepare("UPDATE users SET failed_login_attempts = 0, locked_until = NULL, last_login_at = datetime('now') WHERE id = ?").run(user.id);
 
       const tokenId = uuid();
       const rawRefresh = signRefreshToken(user.id, tokenId);
       const tokenHash = hashToken(rawRefresh);
-      db.prepare(`INSERT INTO refresh_tokens (id, user_id, token_hash, user_agent, ip_address, expires_at) VALUES (?, ?, ?, ?, ?, datetime('now', '+' || ? || ' days'))`)
+      await db.prepare(`INSERT INTO refresh_tokens (id, user_id, token_hash, user_agent, ip_address, expires_at) VALUES (?, ?, ?, ?, ?, datetime('now', '+' || ? || ' days'))`)
         .run(tokenId, user.id, tokenHash, userAgent ?? null, ip ?? null, config.jwtRefreshTtlDays);
 
       const accessToken = signAccessToken(user.id, user.email, user.role);
+
+      const passwordExpired = await isPasswordExpired(user.id);
+
       return {
         user: AuthService.publicUser(user),
         accessToken,
         refreshToken: rawRefresh,
+        passwordExpired,
       };
     })();
   }
 
-  static setupTwoFactor(userId: string) {
-    const user = db.prepare('SELECT id, email, two_factor_enabled, two_factor_secret FROM users WHERE id = ?').get(userId) as any;
+  static async setupTwoFactor(userId: string) {
+    const user = await db.prepare('SELECT id, email, two_factor_enabled, two_factor_secret FROM users WHERE id = ?').get(userId) as any;
     if (!user) throw new AppError(404, 'User not found');
     if (user.two_factor_enabled) throw new AppError(409, 'Two-factor authentication is already enabled');
 
@@ -115,19 +169,19 @@ export class AuthService {
   }
 
   static async verifyAndEnableTwoFactor(userId: string, input: { secret: string; code: string }) {
-    const user = db.prepare('SELECT id, two_factor_enabled FROM users WHERE id = ?').get(userId) as any;
+    const user = await db.prepare('SELECT id, two_factor_enabled FROM users WHERE id = ?').get(userId) as any;
     if (!user) throw new AppError(404, 'User not found');
     if (user.two_factor_enabled) throw new AppError(409, 'Two-factor authentication is already enabled');
 
     const valid = await verifyTOTP({ secret: input.secret, token: input.code?.trim() });
     if (!valid) throw new AppError(400, 'Invalid verification code');
 
-    db.prepare('UPDATE users SET two_factor_enabled = 1, two_factor_secret = ? WHERE id = ?').run(input.secret, userId);
+    await db.prepare('UPDATE users SET two_factor_enabled = 1, two_factor_secret = ? WHERE id = ?').run(input.secret, userId);
     return { enabled: true };
   }
 
   static async disableTwoFactor(userId: string, currentPassword: string) {
-    const user = db.prepare('SELECT id, password_hash, two_factor_enabled FROM users WHERE id = ?').get(userId) as any;
+    const user = await db.prepare('SELECT id, password_hash, two_factor_enabled FROM users WHERE id = ?').get(userId) as any;
     if (!user) throw new AppError(404, 'User not found');
     if (!user.two_factor_enabled) throw new AppError(409, 'Two-factor authentication is not enabled');
 
@@ -135,52 +189,60 @@ export class AuthService {
       throw new AppError(401, 'Current password is incorrect');
     }
 
-    db.prepare("UPDATE users SET two_factor_enabled = 0, two_factor_secret = NULL, updated_at = datetime('now') WHERE id = ?").run(userId);
+    await db.prepare("UPDATE users SET two_factor_enabled = 0, two_factor_secret = NULL, updated_at = datetime('now') WHERE id = ?").run(userId);
     return { enabled: false };
   }
 
   static async register(input: any) {
-    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(input.email);
+    const existing = await db.prepare('SELECT id FROM users WHERE email = ?').get(input.email);
     if (existing) throw new AppError(409, 'Email already registered');
 
-    const employeeId = nextEmployeeId();
+    const policy = await getPasswordPolicy();
+    const { valid, errors } = await validatePassword(input.password, policy);
+    if (!valid) {
+      throw new AppError(400, `Password does not meet policy: ${errors.join('; ')}`);
+    }
+
+    const employeeId = await nextEmployeeId();
     const id = uuid();
     const passwordHash = await bcryptBreaker.call(() => bcrypt.hash(input.password, SALT_ROUNDS));
 
-    db.prepare(`INSERT INTO users (id, employee_id, first_name, last_name, email, password_hash, phone_number, department_id, designation, joining_date)
+    await db.prepare(`INSERT INTO users (id, employee_id, first_name, last_name, email, password_hash, phone_number, department_id, designation, joining_date)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(id, employeeId, input.firstName, input.lastName, input.email, passwordHash, input.phoneNumber ?? null, input.departmentId ?? null, input.designation ?? null, input.joiningDate ?? null);
+
+    await recordPassword(id, passwordHash);
 
     return { id, employeeId, firstName: input.firstName, lastName: input.lastName, email: input.email, role: 'employee' };
   }
 
-  static refreshToken(rawToken: string) {
+  static async refreshToken(rawToken: string) {
     let payload;
     try { payload = verifyRefreshToken(rawToken); } catch { throw new AppError(401, 'Invalid refresh token'); }
 
-    const stored = db.prepare('SELECT * FROM refresh_tokens WHERE user_id = ? AND id = ?').get(payload.sub, payload.tokenId) as any;
+    const stored = await db.prepare('SELECT * FROM refresh_tokens WHERE user_id = ? AND id = ?').get(payload.sub, payload.tokenId) as any;
     if (!stored) throw new AppError(401, 'Refresh token revoked');
     if (stored.revoked_at && parseUTC(stored.revoked_at) <= new Date()) {
       // Replay of an already-revoked token: revoke every session for this user.
-      db.transaction(() => {
+      await db.transaction(async () => {
         revokeUserTokens(payload.sub);
-        db.prepare("UPDATE refresh_tokens SET revoked_at = datetime('now') WHERE user_id = ?").run(payload.sub);
+        await db.prepare("UPDATE refresh_tokens SET revoked_at = datetime('now') WHERE user_id = ?").run(payload.sub);
       })();
       throw new AppError(401, 'Refresh token revoked');
     }
     if (parseUTC(stored.expires_at) < new Date()) throw new AppError(401, 'Refresh token expired');
     if (!verifyTokenHash(rawToken, stored.token_hash)) throw new AppError(401, 'Token mismatch');
 
-    return db.transaction(() => {
-      db.prepare("UPDATE refresh_tokens SET revoked_at = datetime('now', '+120 seconds') WHERE id = ?").run(stored.id);
+    return await db.transaction(async () => {
+      await db.prepare("UPDATE refresh_tokens SET revoked_at = datetime('now') WHERE id = ?").run(stored.id);
 
       const newTokenId = uuid();
       const newRawRefresh = signRefreshToken(payload.sub, newTokenId);
       const newHash = hashToken(newRawRefresh);
-      db.prepare(`INSERT INTO refresh_tokens (id, user_id, token_hash, user_agent, ip_address, expires_at) VALUES (?, ?, ?, ?, ?, datetime('now', '+' || ? || ' days'))`)
+      await db.prepare(`INSERT INTO refresh_tokens (id, user_id, token_hash, user_agent, ip_address, expires_at) VALUES (?, ?, ?, ?, ?, datetime('now', '+' || ? || ' days'))`)
         .run(newTokenId, payload.sub, newHash, stored.user_agent, stored.ip_address, config.jwtRefreshTtlDays);
 
-      const user = db.prepare('SELECT id, email, role, status FROM users WHERE id = ?').get(payload.sub) as any;
+      const user = await db.prepare('SELECT id, email, role, status FROM users WHERE id = ?').get(payload.sub) as any;
       if (!user) throw new AppError(401, 'User not found');
       if (user.status !== 'active') throw new AppError(403, 'Account is not active');
 
@@ -188,28 +250,42 @@ export class AuthService {
     })();
   }
 
-  static logout(refreshToken: string) {
+  static async logout(refreshToken: string) {
     try {
       const payload = verifyRefreshToken(refreshToken);
       revokeUserTokens(payload.sub);
-      db.prepare("UPDATE refresh_tokens SET revoked_at = datetime('now') WHERE user_id = ?").run(payload.sub);
+      await db.prepare("UPDATE refresh_tokens SET revoked_at = datetime('now') WHERE user_id = ?").run(payload.sub);
     } catch (e) { console.error('[LOGOUT] Failed to revoke token:', e); }
   }
 
   static async changePassword(userId: string, input: { currentPassword: string; newPassword: string }) {
-    const user = db.prepare('SELECT id, password_hash FROM users WHERE id = ?').get(userId) as any;
+    const user = await db.prepare('SELECT id, password_hash FROM users WHERE id = ?').get(userId) as any;
     if (!user) throw new AppError(404, 'User not found');
     if (!await bcryptBreaker.call(() => bcrypt.compare(input.currentPassword, user.password_hash))) throw new AppError(400, 'Current password is incorrect');
+
+    const policy = await getPasswordPolicy();
+    const { valid, errors } = await validatePassword(input.newPassword, policy);
+    if (!valid) {
+      throw new AppError(400, `Password does not meet policy: ${errors.join('; ')}`);
+    }
+
     const newHash = await bcryptBreaker.call(() => bcrypt.hash(input.newPassword, SALT_ROUNDS));
-    db.transaction(() => {
-      db.prepare("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?").run(newHash, userId);
+
+    const historyValid = await checkPasswordHistory(userId, input.newPassword, policy);
+    if (!historyValid) {
+      throw new AppError(400, `New password cannot be one of your last ${policy.historyCount} passwords`);
+    }
+
+    await db.transaction(async () => {
+      await db.prepare("UPDATE users SET password_hash = ?, failed_login_attempts = 0, locked_until = NULL, updated_at = datetime('now') WHERE id = ?").run(newHash, userId);
+      await recordPassword(userId, newHash);
       revokeUserTokens(userId);
-      db.prepare("UPDATE refresh_tokens SET revoked_at = datetime('now') WHERE user_id = ?").run(userId);
+      await db.prepare("UPDATE refresh_tokens SET revoked_at = datetime('now') WHERE user_id = ?").run(userId);
     })();
   }
 
-  static getMe(userId: string) {
-    const user = db.prepare('SELECT id, employee_id, first_name, last_name, email, role, department_id, designation, joining_date, status, phone_number, profile_picture_url, two_factor_enabled FROM users WHERE id = ?').get(userId) as any;
+  static async getMe(userId: string) {
+    const user = await db.prepare('SELECT id, employee_id, first_name, last_name, email, role, department_id, designation, joining_date, status, phone_number, profile_picture_url, two_factor_enabled FROM users WHERE id = ?').get(userId) as any;
     if (!user) throw new AppError(404, 'User not found');
     return {
       id: user.id, employeeId: user.employee_id, firstName: user.first_name, lastName: user.last_name,
@@ -220,7 +296,7 @@ export class AuthService {
   }
 
   static async forgotPassword(email: string) {
-    const user = db.prepare('SELECT id, email FROM users WHERE email = ?').get(email) as any;
+    const user = await db.prepare('SELECT id, email FROM users WHERE email = ?').get(email) as any;
     if (!user) return { message: 'If the email exists, a reset token has been generated.' };
 
     const mailEnabled = isEmailConfigured();
@@ -239,13 +315,16 @@ export class AuthService {
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
     const id = uuid();
 
-    db.prepare(`INSERT INTO password_reset_tokens (id, user_id, token_hash, expires_at) VALUES (?, ?, ?, datetime('now', '+1 hour'))`)
+    await db.prepare(`INSERT INTO password_reset_tokens (id, user_id, token_hash, expires_at) VALUES (?, ?, ?, datetime('now', '+1 hour'))`)
       .run(id, user.id, tokenHash);
 
     const sent = await sendPasswordResetEmail(user.email, rawToken);
-    if (!sent && config.nodeEnv !== 'production') {
-      const base = process.env.APP_URL ?? 'http://localhost:3000';
-      console.log(`[RESET] Dev-only password reset link for ${user.email}: ${base}/reset-password?token=${rawToken}`);
+    if (!sent) {
+      await db.prepare('DELETE FROM password_reset_tokens WHERE id = ?').run(id);
+      if (config.nodeEnv !== 'production') {
+        const base = process.env.APP_URL ?? 'http://localhost:3000';
+        console.log(`[RESET] Dev-only password reset link for ${user.email}: ${base}/reset-password?token=${rawToken}`);
+      }
     }
 
     return { message: 'If the email exists, a reset token has been generated.' };
@@ -253,14 +332,27 @@ export class AuthService {
 
   static async resetPassword(token: string, newPassword: string) {
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    const row = db.prepare("SELECT * FROM password_reset_tokens WHERE token_hash = ? AND used_at IS NULL AND expires_at > datetime('now')").get(tokenHash) as any;
+    const row = await db.prepare("SELECT * FROM password_reset_tokens WHERE token_hash = ? AND used_at IS NULL AND expires_at > datetime('now')").get(tokenHash) as any;
     if (!row) throw new AppError(400, 'Invalid or expired reset token');
 
+    const policy = await getPasswordPolicy();
+    const { valid, errors } = await validatePassword(newPassword, policy);
+    if (!valid) {
+      throw new AppError(400, `Password does not meet policy: ${errors.join('; ')}`);
+    }
+
     const passwordHash = await bcryptBreaker.call(() => bcrypt.hash(newPassword, 12));
-    db.transaction(() => {
-      db.prepare("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?").run(passwordHash, row.user_id);
-      db.prepare("UPDATE password_reset_tokens SET used_at = datetime('now') WHERE id = ?").run(row.id);
-      db.prepare("UPDATE refresh_tokens SET revoked_at = datetime('now') WHERE user_id = ?").run(row.user_id);
+
+    const historyValid = await checkPasswordHistory(row.user_id, newPassword, policy);
+    if (!historyValid) {
+      throw new AppError(400, `New password cannot be one of your last ${policy.historyCount} passwords`);
+    }
+
+    await db.transaction(async () => {
+      await db.prepare("UPDATE users SET password_hash = ?, failed_login_attempts = 0, locked_until = NULL, updated_at = datetime('now') WHERE id = ?").run(passwordHash, row.user_id);
+      await recordPassword(row.user_id, passwordHash);
+      await db.prepare("UPDATE password_reset_tokens SET used_at = datetime('now') WHERE id = ?").run(row.id);
+      await db.prepare("UPDATE refresh_tokens SET revoked_at = datetime('now') WHERE user_id = ?").run(row.user_id);
       revokeUserTokens(row.user_id);
     })();
   }

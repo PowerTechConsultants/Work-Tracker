@@ -1,4 +1,5 @@
 import swaggerJsdoc from 'swagger-jsdoc';
+import path from 'path';
 
 const options: swaggerJsdoc.Options = {
   definition: {
@@ -73,7 +74,7 @@ const options: swaggerJsdoc.Options = {
           properties: {
             id: { type: 'string' },
             userId: { type: 'string' },
-            type: { type: 'string', enum: ['casual', 'sick', 'paid', 'earned', 'unpaid', 'maternity', 'paternity'] },
+            type: { type: 'string', enum: ['casual', 'sick', 'paid', 'proposal', 'earned', 'unpaid', 'maternity', 'paternity'] },
             status: { type: 'string', enum: ['pending', 'approved', 'rejected'] },
             startDate: { type: 'string', format: 'date' },
             endDate: { type: 'string', format: 'date' },
@@ -94,7 +95,7 @@ const options: swaggerJsdoc.Options = {
       },
     ],
   },
-  apis: ['./src/modules/**/*.routes.ts'],
+  apis: [path.join(__dirname, 'modules', '**', '*.routes.ts')],
 };
 
 export const swaggerSpec = swaggerJsdoc(options);

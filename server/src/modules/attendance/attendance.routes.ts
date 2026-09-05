@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { validate } from '../../middleware/validate';
 import { authenticate } from '../../middleware/authenticate';
 import { requireRole } from '../../middleware/rbac';
+import { apiCache } from '../../middleware/api-cache';
 import { checkInSchema, listAttendanceSchema, updateAttendanceSchema, monthlyQuerySchema, deleteAttendanceSchema, locationOptionalSchema } from './attendance.schema';
 import { AttendanceService, getAttendanceEvents, getAttendanceEventsForUser, getPauseLog } from './attendance.service';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
@@ -42,8 +43,8 @@ router.get('/events/:attendanceId', async (req: Request, res: Response, next) =>
   try {
     const isAdmin = req.user!.role === 'director' || req.user!.role === 'hr';
     const events = isAdmin
-      ? getAttendanceEvents(req.params.attendanceId!)
-      : getAttendanceEventsForUser(req.user!.sub, req.params.attendanceId!);
+      ? await getAttendanceEvents(req.params.attendanceId!)
+      : await getAttendanceEventsForUser(req.user!.sub, req.params.attendanceId!);
     res.json({ events });
   } catch (err) { next(err); }
 });
@@ -52,19 +53,19 @@ router.get('/pause-log', requireRole('director', 'hr'), async (req: Request, res
   try {
     const startDate = req.query.startDate as string | undefined;
     const endDate = req.query.endDate as string | undefined;
-    const events = getPauseLog(startDate, endDate);
+    const events = await getPauseLog(startDate, endDate);
     res.json({ events });
   } catch (err) { next(err); }
 });
 
-router.get('/today', async (req: Request, res: Response, next) => {
+router.get('/today', apiCache({ ttl: 30_000 }), async (req: Request, res: Response, next) => {
   try {
     const record = await AttendanceService.getTodayStatus(req.user!.sub);
     res.json(record);
   } catch (err) { next(err); }
 });
 
-router.get('/today-all', requireRole('director', 'hr'), async (req: Request, res: Response, next) => {
+router.get('/today-all', requireRole('director', 'hr'), apiCache({ ttl: 30_000 }), async (req: Request, res: Response, next) => {
   try {
     const records = await AttendanceService.getTodayAll();
     res.json(records);
@@ -82,7 +83,7 @@ router.get('/history/:userId', requireRole('director', 'hr'), async (req: Reques
   } catch (err) { next(err); }
 });
 
-router.get('/monthly', validate(monthlyQuerySchema, 'query'), async (req: Request, res: Response, next) => {
+router.get('/monthly', apiCache({ ttl: 60_000 }), validate(monthlyQuerySchema, 'query'), async (req: Request, res: Response, next) => {
   try {
     const q = req.query as any;
     const targetUserId = (req.user!.role === 'director' || req.user!.role === 'hr') && q.userId ? q.userId : req.user!.sub;
@@ -116,7 +117,7 @@ router.delete('/bulk', requireRole('director'), validate(deleteAttendanceSchema)
   try {
     const result = await AttendanceService.bulkDelete(req.body);
     try {
-      ActivityLogsService.create(req.user!.sub, 'bulk_delete', 'attendance', undefined, { ...result.scope, deleted: result.deleted }, req.ip);
+      await ActivityLogsService.create(req.user!.sub, 'bulk_delete', 'attendance', undefined, { ...result.scope, deleted: result.deleted }, req.ip);
     } catch {}
     res.json(result);
   } catch (err) { next(err); }
