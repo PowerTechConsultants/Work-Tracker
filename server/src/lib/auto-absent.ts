@@ -16,10 +16,10 @@ async function acquireLock(): Promise<boolean> {
   const now = Date.now();
   const cutoff = now - CHECK_INTERVAL_MS;
   // Atomic: update only if expired, return affected rows
-  const [result] = await db.prepare(
+  const result = await db.prepare(
     "UPDATE app_settings SET value = ? WHERE `key` = 'auto_absent_lock' AND (CAST(value AS UNSIGNED) < ? OR value = '')"
   ).run(String(now), cutoff) as any;
-  if (result.affectedRows > 0) return true;
+  if (result.changes > 0) return true;
   // First run — insert if not exists
   const existing = await getSetting('auto_absent_lock');
   if (!existing) {

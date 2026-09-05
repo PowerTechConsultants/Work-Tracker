@@ -36,13 +36,13 @@ export class RateLimitStore {
       const resetTime = new Date(Date.now() + this.windowMs);
       const resetStr = resetTime.toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
 
-      // Atomic: insert-or-update in one statement, returns affected rows
-      const [result] = await db.prepare(
+      // Atomic: insert-or-update in one statement
+      await db.prepare(
         `INSERT INTO rate_limits (\`key\`, hits, expires_at) VALUES (?, 1, ?)
          ON DUPLICATE KEY UPDATE
            hits = IF(expires_at <= ?, 1, hits + 1),
            expires_at = IF(expires_at <= ?, ?, expires_at)`
-      ).run(pk, resetStr, now, now, resetStr) as any;
+      ).run(pk, resetStr, now, now, resetStr);
 
       // Read the current state after atomic upsert
       const row = await db.prepare('SELECT hits, expires_at FROM rate_limits WHERE `key` = ?').get(pk) as any;
