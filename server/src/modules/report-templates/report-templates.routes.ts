@@ -32,7 +32,7 @@ router.post('/', requireRole('director', 'hr'), validate(createTemplateSchema), 
 
 router.patch('/:id', requireRole('director', 'hr'), requireUuid('id'), validate(updateTemplateSchema), async (req: Request, res: Response, next) => {
   try {
-    const template = await ReportTemplatesService.update(req.params.id!, req.user!.sub, req.body);
+    const template = await ReportTemplatesService.update(req.params.id!, req.user!.sub, req.body, req.user!.role);
     res.json(template);
   } catch (err) { next(err); }
 });

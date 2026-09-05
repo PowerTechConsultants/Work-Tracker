@@ -241,6 +241,10 @@ export class AuthService {
     if (!verifyTokenHash(rawToken, stored.token_hash)) throw new AppError(401, 'Token mismatch');
 
     return await db.transaction(async () => {
+      // Atomically check and revoke inside transaction to prevent TOCTOU race
+      const current = await db.prepare('SELECT revoked_at FROM refresh_tokens WHERE id = ?').get(stored.id) as any;
+      if (current?.revoked_at) throw new AppError(401, 'Refresh token already used');
+
       await db.prepare("UPDATE refresh_tokens SET revoked_at = datetime('now') WHERE id = ?").run(stored.id);
 
       const newTokenId = uuid();

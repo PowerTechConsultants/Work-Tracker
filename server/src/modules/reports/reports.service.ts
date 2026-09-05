@@ -118,7 +118,7 @@ export class ReportsService {
         COUNT(wr.id) as total_reports,
         MAX(wr.date) as latest_date,
         MAX(CASE WHEN wr.date = sub.max_date THEN wr.status END) as latest_status,
-        ROUND(AVG(CASE WHEN wr.date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN wr.current_progress END), 0) as avg_progress_30d
+        ROUND(AVG(CASE WHEN wr.date >= date('now', '-30 day') THEN wr.current_progress END), 0) as avg_progress_30d
       FROM users u
       LEFT JOIN work_reports wr ON wr.user_id = u.id
       LEFT JOIN (

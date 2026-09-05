@@ -12,9 +12,9 @@ export function apiCache(options: ApiCacheOptions) {
     try {
       if (req.method !== 'GET' && req.method !== 'HEAD') return next();
       if (options.condition && !options.condition(req)) return next();
-      if (req.headers['cache-control']?.includes('no-cache')) return next();
+      if (req.headers['cache-control']?.includes('no-cache') || req.headers['cache-control']?.includes('no-store')) return next();
 
-      const cacheKey = options.key?.(req) || `${(req as any).user?.role || 'anon'}:${req.originalUrl}`;
+      const cacheKey = options.key?.(req) || `${(req as any).user?.sub || (req as any).user?.role || 'anon'}:${req.originalUrl}`;
       const cached = await cache.get(cacheKey);
 
       if (cached !== undefined) {

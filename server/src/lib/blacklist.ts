@@ -12,9 +12,10 @@ export async function revokeUserTokens(userId: string) {
 export async function isTokenRevoked(userId: string, issuedAt?: number): Promise<boolean> {
   const row = await db.prepare("SELECT revoked_at FROM token_blacklist WHERE user_id = ? AND expires_at > NOW()").get(userId) as any;
   if (!row) return false;
-  const revokedAt = Number(row.revoked_at);
-  if (isNaN(revokedAt)) return true;
-  return revokedAt > (issuedAt ?? 0);
+  // revoked_at is a DATETIME string like '2024-01-15 10:30:00' — parse to timestamp
+  const revokedTs = new Date(row.revoked_at).getTime() / 1000;
+  if (isNaN(revokedTs)) return true;
+  return revokedTs > (issuedAt ?? 0);
 }
 
 export async function cleanupExpiredBlacklistEntries() {

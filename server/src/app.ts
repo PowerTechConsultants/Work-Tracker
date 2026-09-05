@@ -166,10 +166,10 @@ export function createApp() {
 
   // API routes
   const api = '/api/v1';
-  app.use(`${api}/auth`, authRoutes);
 
-  // Audit logging (applied to all API routes)
+  // Audit logging (applied to ALL API routes including auth)
   app.use(`${api}`, auditLog());
+  app.use(`${api}/auth`, authRoutes);
   app.use(`${api}/users`, usersRoutes);
   app.use(`${api}/departments`, departmentsRoutes);
   app.use(`${api}/teams`, teamsRoutes);
@@ -200,7 +200,9 @@ export function createApp() {
         return;
       }
       const decoded = Buffer.from(authHeader.slice(6), 'base64').toString();
-      const [user, pass] = decoded.split(':');
+      const colonIdx = decoded.indexOf(':');
+      const user = colonIdx >= 0 ? decoded.slice(0, colonIdx) : decoded;
+      const pass = colonIdx >= 0 ? decoded.slice(colonIdx + 1) : '';
       const userMatch = user === 'admin';
       const passBuf = Buffer.from(pass || '');
       const expectedBuf = Buffer.from(config.adminPassword);

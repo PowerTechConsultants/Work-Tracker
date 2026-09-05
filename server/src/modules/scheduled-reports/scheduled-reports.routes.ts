@@ -32,7 +32,7 @@ router.post('/', requireRole('director', 'hr'), validate(createScheduleSchema), 
 
 router.patch('/:id', requireRole('director', 'hr'), requireUuid('id'), validate(updateScheduleSchema), async (req: Request, res: Response, next) => {
   try {
-    const schedule = await ScheduledReportsService.update(req.params.id!, req.user!.sub, req.body);
+    const schedule = await ScheduledReportsService.update(req.params.id!, req.user!.sub, req.body, req.user!.role);
     res.json(schedule);
   } catch (err) { next(err); }
 });

@@ -372,6 +372,11 @@ export class AnalyticsService {
         start = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
         break;
       }
+      case 'quarter': {
+        const q = Math.floor(now.getMonth() / 3);
+        start = `${now.getFullYear()}-${String(q * 3 + 1).padStart(2, '0')}-01`;
+        break;
+      }
       case 'year':
         start = `${now.getFullYear()}-01-01`;
         break;

@@ -5,7 +5,7 @@ import path from 'path';
 import { createApp } from './app';
 import { config } from './lib/config';
 import { initializeSocket, closeSocket } from './lib/socket';
-import { startAutoAbsentScheduler } from './lib/auto-absent';
+import { startAutoAbsentScheduler, stopAutoAbsentScheduler } from './lib/auto-absent';
 import { cleanupExpiredBlacklistEntries } from './lib/blacklist';
 import { ensureAdminBootstrap } from './db/bootstrap';
 import db, { pool } from './db';
@@ -69,6 +69,7 @@ const gracefulShutdown = async (signal: string, exitCode = 0) => {
   if (shuttingDown) return;
   shuttingDown = true;
   console.log(`\n[SHUTDOWN] ${signal} received. Starting graceful shutdown...`);
+  stopAutoAbsentScheduler();
   closeSocket();
   console.log('[SHUTDOWN] Socket.IO server closed');
   clearInterval(cleanupTimer);

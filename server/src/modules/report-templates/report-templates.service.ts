@@ -52,10 +52,10 @@ export class ReportTemplatesService {
     return mapTemplate(row);
   }
 
-  static async update(id: string, userId: string, input: UpdateTemplateInput) {
+  static async update(id: string, userId: string, input: UpdateTemplateInput, role?: string) {
     const existing = await db.prepare('SELECT * FROM report_templates WHERE id = ?').get(id) as any;
     if (!existing) throw new AppError(404, 'Template not found');
-    if (existing.user_id !== userId) throw new AppError(403, 'Cannot update others template');
+    if (role !== 'director' && role !== 'hr' && existing.user_id !== userId) throw new AppError(403, 'Cannot update others template');
 
     const sets = ["updated_at = datetime('now')"];
     const params: any[] = [];

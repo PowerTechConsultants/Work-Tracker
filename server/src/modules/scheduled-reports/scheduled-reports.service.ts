@@ -67,10 +67,10 @@ export class ScheduledReportsService {
     return mapSchedule(row);
   }
 
-  static async update(id: string, userId: string, input: UpdateScheduleInput) {
+  static async update(id: string, userId: string, input: UpdateScheduleInput, role?: string) {
     const existing = await db.prepare('SELECT * FROM scheduled_reports WHERE id = ?').get(id) as any;
     if (!existing) throw new AppError(404, 'Schedule not found');
-    if (existing.user_id !== userId) throw new AppError(403, 'Cannot update others schedule');
+    if (role !== 'director' && role !== 'hr' && existing.user_id !== userId) throw new AppError(403, 'Cannot update others schedule');
 
     const sets = ["updated_at = datetime('now')"];
     const params: any[] = [];

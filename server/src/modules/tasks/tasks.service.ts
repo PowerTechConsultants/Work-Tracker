@@ -115,7 +115,11 @@ export class TasksService {
     }
     const assignees = await db.prepare(`SELECT ta.user_id, u.first_name, u.last_name, u.employee_id FROM task_assignments ta JOIN users u ON ta.user_id = u.id WHERE ta.task_id = ?`).all(id);
     const comments = await db.prepare('SELECT tc.*, u.first_name, u.last_name FROM task_comments tc JOIN users u ON tc.author_id = u.id WHERE tc.task_id = ? ORDER BY tc.created_at DESC').all(id);
-    const approvals = await db.prepare('SELECT * FROM task_approvals WHERE task_id = ? ORDER BY requested_at DESC').all(id);
+    const approvals = (await db.prepare('SELECT * FROM task_approvals WHERE task_id = ? ORDER BY requested_at DESC').all(id) as any[]).map((a: any) => ({
+      id: a.id, taskId: a.task_id, requestedById: a.requested_by_id, status: a.status,
+      requestComment: a.request_comment, reviewedById: a.reviewed_by_id, comment: a.comment,
+      requestedAt: a.requested_at, reviewedAt: a.reviewed_at,
+    }));
     return { ...mapTask(t), assignees: assignees.map((a: any) => ({ userId: a.user_id, firstName: a.first_name, lastName: a.last_name, employeeId: a.employee_id })), comments, approvals };
   }
 
@@ -212,6 +216,9 @@ export class TasksService {
     return await db.transaction(async () => {
       const task = await db.prepare('SELECT id, title, created_by_id FROM tasks WHERE id = ?').get(taskId) as any;
       if (!task) throw new AppError(404, 'Task not found');
+      // Prevent duplicate pending approval requests
+      const existingPending = await db.prepare('SELECT id FROM task_approvals WHERE task_id = ? AND status = ?').get(taskId, 'pending');
+      if (existingPending) throw new AppError(409, 'A pending approval request already exists for this task');
       if (role === 'employee') {
         const isAssignee = await db.prepare('SELECT 1 FROM task_assignments WHERE task_id = ? AND user_id = ?').get(taskId, requestedById);
         if (!isAssignee && task.created_by_id !== requestedById) throw new AppError(403, 'You are not assigned to this task');
