@@ -61,7 +61,8 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     req.user.role = user.role;
     next();
   } catch {
-    res.status(401).json({ error: 'Invalid or expired token' });
+    // Distinguish between auth failure and server error
+    res.status(503).json({ error: 'Authentication service unavailable' });
   }
 }
 

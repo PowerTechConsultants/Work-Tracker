@@ -84,12 +84,13 @@ export class DocumentsService {
     if (!target) throw new AppError(404, 'Employee not found');
     if (target.status !== 'active') throw new AppError(400, 'Employee account is not active');
 
-    const duplicate = await db.prepare("SELECT id FROM document_requests WHERE user_id = ? AND doc_type = ? AND status = 'pending'").get(targetId, input.docType);
-    if (duplicate) throw new AppError(409, `A pending ${label} request already exists for this employee`);
-
     const id = uuid();
-    await db.prepare('INSERT INTO document_requests (id, user_id, requested_by_id, doc_type, note) VALUES (?, ?, ?, ?, ?)')
-      .run(id, targetId, requestedById, input.docType, input.note ?? null);
+    await db.transaction(async () => {
+      const duplicate = await db.prepare("SELECT id FROM document_requests WHERE user_id = ? AND doc_type = ? AND status = 'pending'").get(targetId, input.docType);
+      if (duplicate) throw new AppError(409, `A pending ${label} request already exists for this employee`);
+      await db.prepare('INSERT INTO document_requests (id, user_id, requested_by_id, doc_type, note) VALUES (?, ?, ?, ?, ?)')
+        .run(id, targetId, requestedById, input.docType, input.note ?? null);
+    })();
     const doc = mapDoc(await db.prepare(`${SELECT} WHERE d.id = ?`).get(id));
 
     const requester = await db.prepare('SELECT first_name, last_name FROM users WHERE id = ?').get(requestedById) as any;

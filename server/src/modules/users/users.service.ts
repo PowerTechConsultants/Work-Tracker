@@ -45,7 +45,7 @@ export class UsersService {
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     const count = (await db.prepare(`SELECT count(*) as c FROM users ${where}`).get(...params) as any).c;
-    const rows = await db.prepare(`SELECT id, employee_id, first_name, last_name, email, role, designation, department_id, status, phone_number, joining_date, dob, gender, father_name, nationality, qualification, address_street, address_city, address_state, address_pincode, profile_picture_url, created_at, updated_at FROM users ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`).all(...params, limit, offset);
+    const rows = await db.prepare(`SELECT id, employee_id, first_name, last_name, email, role, designation, department_id, status, phone_number, joining_date, dob, gender, father_name, nationality, qualification, address_street, address_city, address_state, address_pincode, profile_picture_url, two_factor_enabled, last_login_at, created_at, updated_at FROM users ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`).all(...params, limit, offset);
     return { users: rows.map(mapUser), total: count, page, limit };
   }
 

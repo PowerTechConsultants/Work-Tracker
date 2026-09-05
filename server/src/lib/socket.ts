@@ -18,7 +18,7 @@ const HEARTBEAT_TIMEOUT = 15000;
 const SUSPICIOUS_RECONNECT_THRESHOLD = 10;
 const SUSPICIOUS_WINDOW_MS = 5 * 60 * 1000;
 
-setInterval(() => {
+const reconnectCleanupInterval = setInterval(() => {
   const now = Date.now();
   for (const [key, entry] of reconnectTracker) {
     if (now - entry.lastSeen > SUSPICIOUS_WINDOW_MS) reconnectTracker.delete(key);
@@ -170,6 +170,7 @@ export function getIO(): Server {
 }
 
 export function closeSocket(): void {
+  clearInterval(reconnectCleanupInterval);
   if (io) {
     io.close();
     io = null;

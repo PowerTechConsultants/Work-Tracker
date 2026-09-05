@@ -472,7 +472,7 @@ export class LeavesService {
       await db.prepare(`UPDATE attendance SET status = 'absent', notes = NULL, updated_at = datetime('now') WHERE user_id = ? AND status = 'leave' AND date IN (${placeholders})`).run(leave.user_id, ...dates);
       invalidateAnalyticsCache();
       await db.prepare("INSERT INTO activity_logs (id, actor_id, action, entity_type, entity_id, old_values, new_values, ip_address) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-        .run(uuid(), userId, 'cancel_leave', 'leave', id, JSON.stringify({ status: 'approved' }), JSON.stringify({ status: 'cancelled' }), null);
+        .run(uuid(), userId, 'cancel_leave', 'leave', id, JSON.stringify({ status: leave.status }), JSON.stringify({ status: 'cancelled' }), null);
       return mapLeave(await db.prepare('SELECT l.id, l.user_id, l.type, l.start_date, l.end_date, l.reason, l.status, l.review_comment, l.reviewed_by_id, l.reviewed_at, l.deducted_from, l.extra, l.leave_year, l.created_at, l.updated_at, u.first_name, u.last_name, u.employee_id FROM leaves l JOIN users u ON l.user_id = u.id WHERE l.id = ?').get(id));
     })();
   }

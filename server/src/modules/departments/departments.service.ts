@@ -18,9 +18,11 @@ export class DepartmentsService {
   }
 
   static async create(input: any) {
-    if (await db.prepare('SELECT id FROM departments WHERE name = ?').get(input.name)) throw new AppError(409, 'Name already exists');
     const id = uuid();
-    await db.prepare('INSERT INTO departments (id, name, description, manager_id) VALUES (?, ?, ?, ?)').run(id, input.name, input.description ?? null, input.managerId ?? null);
+    await db.transaction(async () => {
+      if (await db.prepare('SELECT id FROM departments WHERE name = ?').get(input.name)) throw new AppError(409, 'Name already exists');
+      await db.prepare('INSERT INTO departments (id, name, description, manager_id) VALUES (?, ?, ?, ?)').run(id, input.name, input.description ?? null, input.managerId ?? null);
+    })();
     return await this.getById(id);
   }
 

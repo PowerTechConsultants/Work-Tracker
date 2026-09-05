@@ -52,12 +52,12 @@ export function compressMiddleware() {
         res.setHeader('Content-Encoding', encoding);
         res.setHeader('Content-Length', compressed.length);
         res.setHeader('Vary', 'Accept-Encoding');
-        _end(compressed, ...args);
+        return _end(compressed, ...args);
       } catch {
         res.removeHeader('Content-Encoding');
         res.removeHeader('Vary');
         res.setHeader('Content-Length', body.length);
-        _end(chunk, ...args);
+        return _end(chunk, ...args);
       }
     };
 

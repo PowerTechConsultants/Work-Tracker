@@ -82,7 +82,8 @@ if (fs.existsSync(schemaMysqlPath)) {
   const stmts = schema.split(';').map(s => s.trim()).filter(Boolean);
   for (const stmt of stmts) {
     if (!stmt) continue;
-    try { await pool.query(translateExec(stmt)); } catch (e: any) { if (!e.message?.includes('already exists') && !e.message?.includes('Duplicate')) console.error('[DB] Schema:', e.message); }
+    // schema.mysql.sql is already MySQL-native — don't apply translateExec (it would convert TEXT to VARCHAR(255))
+    try { await pool.query(stmt); } catch (e: any) { if (!e.message?.includes('already exists') && !e.message?.includes('Duplicate')) console.error('[DB] Schema:', e.message); }
   }
 }
 

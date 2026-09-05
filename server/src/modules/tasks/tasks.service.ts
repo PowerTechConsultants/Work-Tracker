@@ -257,7 +257,7 @@ export class TasksService {
     const statusMap = Object.fromEntries(stats.map((r: any) => [r.status, r.count]));
     const total = stats.reduce((sum: number, r: any) => sum + r.count, 0);
     const today = getISTDate();
-    const overdue = (await db.prepare(`SELECT COUNT(*) as c FROM tasks ${where ? where + ' AND' : 'WHERE'} due_date < ? AND status != 'completed'`).get(...params, today) as any).c;
+    const overdue = (await db.prepare(`SELECT COUNT(*) as c FROM tasks ${where ? where + ' AND' : 'WHERE'} due_date < ? AND status NOT IN ('completed', 'cancelled')`).get(...params, today) as any).c;
     return { total, pending: statusMap.pending || 0, inProgress: statusMap.in_progress || 0, completed: statusMap.completed || 0, overdue };
   }
 
