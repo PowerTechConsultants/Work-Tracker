@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
+import crypto from 'crypto';
 import { compressMiddleware } from './middleware/compress';
 import { requestTimeout } from './lib/timeout';
 import { concurrencyLimiter } from './lib/concurrency-limiter';
@@ -38,7 +39,7 @@ import reportTemplatesRoutes from './modules/report-templates/report-templates.r
 import scheduledReportsRoutes from './modules/scheduled-reports/scheduled-reports.routes';
 
 // Clean up expired rate limit entries on startup
-  RateLimitStore.resetExpired();
+RateLimitStore.resetExpired().catch(() => {});
 
 export function createApp() {
   const app = express();
@@ -200,7 +201,11 @@ export function createApp() {
       }
       const decoded = Buffer.from(authHeader.slice(6), 'base64').toString();
       const [user, pass] = decoded.split(':');
-      if (user === 'admin' && pass === config.adminPassword) {
+      const userMatch = user === 'admin';
+      const passBuf = Buffer.from(pass || '');
+      const expectedBuf = Buffer.from(config.adminPassword);
+      const passMatch = passBuf.length === expectedBuf.length && crypto.timingSafeEqual(passBuf, expectedBuf);
+      if (userMatch && passMatch) {
         next();
       } else {
         res.status(401).json({ error: 'Invalid credentials' });

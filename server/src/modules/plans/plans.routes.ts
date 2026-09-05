@@ -26,7 +26,12 @@ router.get('/slots', requireRole('director', 'hr'), async (_req: Request, res: R
 
 router.get('/export', requireRole('director', 'hr'), async (req: Request, res: Response, next) => {
   try {
-    const plans = await PlansService.exportByUser(req.query.userId as string, req.query.startDate as string, req.query.endDate as string);
+    const userId = req.query.userId as string | undefined;
+    if (userId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+      res.status(400).json({ error: 'Invalid userId format' });
+      return;
+    }
+    const plans = await PlansService.exportByUser(userId, req.query.startDate as string, req.query.endDate as string);
     res.json(plans);
   } catch (err) { next(err); }
 });

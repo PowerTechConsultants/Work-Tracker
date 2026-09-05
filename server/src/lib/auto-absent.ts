@@ -99,10 +99,10 @@ async function markAbsentForDay(date: string, skipUserIds: string[]) {
 async function processDay(date: string) {
   if (isSundayIST(date)) return;
 
-  const holidayUserIds = await skipUsersForHoliday(date);
-  if (holidayUserIds.length === 0 && await isCompanyWideHoliday(date)) return;
-
-  await markAbsentForDay(date, holidayUserIds);
+    // Check for holidays
+    if (await isCompanyWideHoliday(date)) return; // Company-wide holiday — skip everyone
+    const holidayUserIds = await skipUsersForHoliday(date);
+    await markAbsentForDay(date, holidayUserIds);
 }
 
 // Backfills any missed working days since the last processed date (unlimited).

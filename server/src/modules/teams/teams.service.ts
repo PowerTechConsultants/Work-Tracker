@@ -100,16 +100,33 @@ export class TeamsService {
 
   static async getTeamsWithStats() {
     const teams = await this.list();
-    const results: any[] = [];
+    if (teams.length === 0) return [];
+
+    // Batch: get all member IDs across all teams
+    const allMemberIds = new Set<string>();
     for (const t of teams) {
-      const avgCompletion = await db.prepare(`
-        SELECT ROUND(AVG(CASE WHEN t.status = 'completed' THEN 100.0 ELSE t.progress_percent END), 0) as avg_progress
-        FROM tasks t
-        JOIN task_assignments ta ON t.id = ta.task_id
-        WHERE ta.user_id IN (${t.members.map(() => '?').join(',')})
-      `).get(...t.members.map((m: any) => m.userId)) as any;
-      results.push({ ...t, avgTaskProgress: avgCompletion?.avg_progress ?? 0 });
+      for (const m of t.members) allMemberIds.add(m.userId);
     }
-    return results;
+    if (allMemberIds.size === 0) return teams.map(t => ({ ...t, avgTaskProgress: 0 }));
+
+    const memberArr = [...allMemberIds];
+    const ph = memberArr.map(() => '?').join(',');
+    const progressRows = await db.prepare(`
+      SELECT ta.user_id, ROUND(AVG(CASE WHEN t.status = 'completed' THEN 100.0 ELSE t.progress_percent END), 0) as avg_progress
+      FROM tasks t
+      JOIN task_assignments ta ON t.id = ta.task_id
+      WHERE ta.user_id IN (${ph})
+      GROUP BY ta.user_id
+    `).all(...memberArr) as any[];
+    const progressMap = new Map<string, number>();
+    for (const r of progressRows) progressMap.set(r.user_id, r.avg_progress);
+
+    return teams.map(t => {
+      const memberIds = t.members.map((m: any) => m.userId);
+      const avg = memberIds.length > 0
+        ? Math.round(memberIds.reduce((sum: number, id: string) => sum + (progressMap.get(id) ?? 0), 0) / memberIds.length)
+        : 0;
+      return { ...t, avgTaskProgress: avg };
+    });
   }
 }

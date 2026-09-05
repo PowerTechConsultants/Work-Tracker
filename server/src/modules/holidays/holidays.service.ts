@@ -149,11 +149,26 @@ export class HolidaysService {
           if (leaveId) {
             await db.prepare("UPDATE attendance SET status = 'leave', notes = ?, updated_at = datetime('now') WHERE date = ? AND status = 'holiday' AND user_id = ?").run(`Approved leave (${leaveId})`, h.date, uid);
           } else {
-            await db.prepare("UPDATE attendance SET status = 'absent', notes = NULL, updated_at = datetime('now') WHERE date = ? AND status = 'holiday' AND user_id = ?").run(h.date, uid);
+            // Restore to 'present' if they had checked in, otherwise 'absent'
+            const hadCheckedIn = await db.prepare("SELECT 1 FROM attendance WHERE user_id = ? AND date = ? AND login_time IS NOT NULL AND status = 'holiday'").get(uid, h.date);
+            if (hadCheckedIn) {
+              await db.prepare("UPDATE attendance SET status = 'present', notes = NULL, updated_at = datetime('now') WHERE date = ? AND status = 'holiday' AND user_id = ?").run(h.date, uid);
+            } else {
+              await db.prepare("UPDATE attendance SET status = 'absent', notes = NULL, updated_at = datetime('now') WHERE date = ? AND status = 'holiday' AND user_id = ?").run(h.date, uid);
+            }
           }
         }
       } else {
-        await db.prepare("UPDATE attendance SET status = 'absent', notes = NULL, updated_at = datetime('now') WHERE date = ? AND status = 'holiday'").run(h.date);
+        // Company-wide holiday deletion: check each user individually
+        const allActive = await db.prepare("SELECT id FROM users WHERE status = 'active'").all() as any[];
+        for (const u of allActive) {
+          const hadCheckedIn = await db.prepare("SELECT 1 FROM attendance WHERE user_id = ? AND date = ? AND login_time IS NOT NULL AND status = 'holiday'").get(u.id, h.date);
+          if (hadCheckedIn) {
+            await db.prepare("UPDATE attendance SET status = 'present', notes = NULL, updated_at = datetime('now') WHERE date = ? AND status = 'holiday' AND user_id = ?").run(h.date, u.id);
+          } else {
+            await db.prepare("UPDATE attendance SET status = 'absent', notes = NULL, updated_at = datetime('now') WHERE date = ? AND status = 'holiday' AND user_id = ?").run(h.date, u.id);
+          }
+        }
       }
       await db.prepare('DELETE FROM holidays WHERE id = ?').run(id);
       await db.prepare("INSERT INTO activity_logs (id, actor_id, action, entity_type, entity_id, old_values, new_values, ip_address) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")

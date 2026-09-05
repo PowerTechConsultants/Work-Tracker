@@ -124,11 +124,12 @@ export class PlansService {
     }));
   }
 
-  static async exportByUser(userId: string, startDate?: string, endDate?: string) {
-    const conds = ['wp.user_id = ?']; const params: any[] = [userId];
+  static async exportByUser(userId?: string, startDate?: string, endDate?: string) {
+    const conds: string[] = []; const params: any[] = [];
+    if (userId) { conds.push('wp.user_id = ?'); params.push(userId); }
     if (startDate) { conds.push('wp.date >= ?'); params.push(startDate); }
     if (endDate) { conds.push('wp.date <= ?'); params.push(endDate); }
-    const where = `WHERE ${conds.join(' AND ')}`;
+    const where = conds.length > 0 ? `WHERE ${conds.join(' AND ')}` : '';
     return (await db.prepare(`SELECT wp.*, u.first_name, u.last_name, u.employee_id FROM work_plans wp JOIN users u ON wp.user_id = u.id ${where} ORDER BY wp.date DESC`).all(...params)).map(mapPlan);
   }
 }

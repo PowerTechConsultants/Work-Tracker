@@ -3,13 +3,15 @@ import { AppError } from '../../lib/app-error';
 import type { CreateTemplateInput, UpdateTemplateInput, ListTemplatesInput } from './report-templates.schema';
 
 function mapTemplate(r: any) {
+  let fields: any[] = [];
+  try { fields = r.fields ? JSON.parse(r.fields) : []; } catch { fields = []; }
   return {
     id: r.id,
     userId: r.user_id,
     name: r.name,
     description: r.description,
     type: r.type,
-    fields: r.fields ? JSON.parse(r.fields) : [],
+    fields,
     isDefault: !!r.is_default,
     createdAt: r.created_at,
     updatedAt: r.updated_at,

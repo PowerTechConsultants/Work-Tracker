@@ -121,7 +121,15 @@ export class AttendanceService {
     const rec = await db.prepare('SELECT * FROM attendance WHERE user_id = ? AND date = ?').get(userId, today) as any;
     if (!rec) throw new AppError(404, 'No check-in found for today');
     if (rec.logout_time) throw new AppError(409, 'Already checked out today');
-    if (rec.pause_start_time && !rec.pause_end_time) return rec;
+    if (rec.pause_start_time && !rec.pause_end_time) {
+      // Ensure status is on_break even if previous update failed
+      if (rec.status !== 'on_break') {
+        const now = new Date().toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
+        await db.prepare("UPDATE attendance SET status = 'on_break', updated_at = ? WHERE id = ?").run(now, rec.id);
+        rec.status = 'on_break';
+      }
+      return rec;
+    }
 
     const now = new Date().toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
     await db.prepare("UPDATE attendance SET pause_start_time = ?, pause_end_time = NULL, status = 'on_break', updated_at = ? WHERE id = ?").run(now, now, rec.id);

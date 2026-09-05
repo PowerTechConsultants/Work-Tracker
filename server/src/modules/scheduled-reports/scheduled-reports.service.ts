@@ -3,11 +3,13 @@ import { AppError } from '../../lib/app-error';
 import type { CreateScheduleInput, UpdateScheduleInput, ListSchedulesInput } from './scheduled-reports.schema';
 
 function mapSchedule(r: any) {
+  let recipients: any[] = [];
+  try { recipients = r.recipients ? JSON.parse(r.recipients) : []; } catch { recipients = []; }
   return {
     id: r.id,
     templateId: r.template_id,
     userId: r.user_id,
-    recipients: r.recipients ? JSON.parse(r.recipients) : [],
+    recipients,
     scheduleCron: r.schedule_cron,
     format: r.format,
     isActive: !!r.is_active,
@@ -109,7 +111,8 @@ export class ScheduledReportsService {
 
     try {
       const template = await db.prepare('SELECT * FROM report_templates WHERE id = ?').get(schedule.template_id) as any;
-      const fields = template?.fields ? JSON.parse(template.fields) : [];
+      let fields: any[] = [];
+      try { fields = template?.fields ? JSON.parse(template.fields) : []; } catch { fields = []; }
 
       // Generate report data based on template type
       let reportData: any = {};
@@ -119,7 +122,8 @@ export class ScheduledReportsService {
         reportData = { date: today, reports, count: reports.length };
       } else if (template?.type === 'weekly') {
         const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
-        const reports = await db.prepare('SELECT * FROM work_reports WHERE date >= ?').all(weekAgo);
+        const today = new Date().toISOString().split('T')[0];
+        const reports = await db.prepare('SELECT * FROM work_reports WHERE date >= ? AND date <= ?').all(weekAgo, today);
         reportData = { startDate: weekAgo, reports, count: reports.length };
       } else {
         const allReports = await db.prepare('SELECT * FROM work_reports ORDER BY date DESC LIMIT 100').all();

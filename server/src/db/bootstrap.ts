@@ -30,7 +30,7 @@ export async function ensureAdminBootstrap() {
     const dept = await db.prepare('SELECT id FROM departments WHERE name = ?').get('Engineering') as any;
     const finalDeptId = dept?.id ?? deptId;
 
-    const passwordHash = bcrypt.hashSync(adminPassword, 12);
+    const passwordHash = await bcrypt.hash(adminPassword, 12);
     await db.prepare(`INSERT INTO users (id, employee_id, first_name, last_name, email, password_hash, role, designation, department_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(uuid(), 'EMP-0001', 'Admin', 'User', adminEmail, passwordHash, 'director', 'System Administrator', finalDeptId);
   })();
