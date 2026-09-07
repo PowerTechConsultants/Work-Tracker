@@ -367,10 +367,9 @@ export class LeavesService {
     };
 
     const totalBalance = entitlement.total;
-    // Carryover: all remaining proposal days from previous year (only proposal carries forward, based on that year's entitlement)
-    const prevEntitlement = await entitlementForYear(userId, prevYear);
-    const prevProposalUsed = await proposalUsedInYear(userId, prevYear);
-    const carryover = await hasLeaveBefore(userId, currentYear) ? Math.max(0, prevEntitlement.proposal - prevProposalUsed) : 0;
+    // Carryover: stored in leave_carryforwards table (computed by annual reset on Jan 1)
+    const carryRow = await db.prepare('SELECT proposal_carryforward FROM leave_carryforwards WHERE user_id = ? AND year = ?').get(userId, currentYear) as any;
+    const carryover = carryRow?.proposal_carryforward ?? 0;
     const totalAvailable = totalBalance + carryover;
     const totalRemaining = Math.max(0, totalAvailable - usage.used);
 

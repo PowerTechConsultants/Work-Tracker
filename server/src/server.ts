@@ -6,6 +6,7 @@ import { createApp } from './app';
 import { config } from './lib/config';
 import { initializeSocket, closeSocket } from './lib/socket';
 import { startAutoAbsentScheduler, stopAutoAbsentScheduler } from './lib/auto-absent';
+import { runAnnualLeaveReset } from './lib/leave-reset';
 import { cleanupExpiredBlacklistEntries } from './lib/blacklist';
 import { ensureAdminBootstrap } from './db/bootstrap';
 import db, { pool } from './db';
@@ -13,6 +14,7 @@ import db, { pool } from './db';
 await ensureAdminBootstrap();
 
 cleanupExpiredBlacklistEntries().catch(() => {});
+runAnnualLeaveReset().catch(e => console.error('[Leave-Reset] Startup error:', e));
 
 const app = createApp();
 

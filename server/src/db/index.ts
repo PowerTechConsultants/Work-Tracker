@@ -543,6 +543,24 @@ const migrations: Array<{ version: number; name: string; up: () => Promise<void>
       await addColumnIfMissing('scheduled_report_results', 'result_data', "result_data TEXT");
     },
   },
+  {
+    version: 16,
+    name: 'leave-carryforwards-table',
+    up: async () => {
+      await db.exec(`
+        CREATE TABLE IF NOT EXISTS leave_carryforwards (
+          id VARCHAR(36) PRIMARY KEY,
+          user_id VARCHAR(36) NOT NULL,
+          year INT NOT NULL,
+          prev_year INT NOT NULL,
+          proposal_carryforward INT NOT NULL DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY unique_user_year (user_id, year)
+        );
+        CREATE INDEX IF NOT EXISTS idx_leave_carryforwards_user ON leave_carryforwards(user_id, year);
+      `);
+    },
+  },
 ];
 
 await db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
