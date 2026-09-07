@@ -91,8 +91,9 @@ export class ReportsService {
       if (!report) throw new AppError(404, 'Report not found');
       if (report.status !== 'submitted') throw new AppError(409, 'Report not in reviewable state');
       if (report.user_id === reviewedById) throw new AppError(403, 'Cannot review your own report');
-      await db.prepare("UPDATE work_reports SET status = ?, feedback = ?, reviewed_by_id = ?, reviewed_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND status = 'submitted'")
+      const result = await db.prepare("UPDATE work_reports SET status = ?, feedback = ?, reviewed_by_id = ?, reviewed_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND status = 'submitted'")
         .run(status, comments ?? null, reviewedById, id);
+      if (result.changes === 0) throw new AppError(409, 'Already reviewed');
       await db.prepare('INSERT INTO notifications (id, recipient_id, sender_id, title, message, type, link) VALUES (?, ?, ?, ?, ?, ?, ?)')
         .run(uuid(), report.user_id, reviewedById, `Report ${status}`, `Your daily report has been ${status}`, status === 'approved' ? 'success' : 'warning', `/reports/${id}`);
       return mapReport(await db.prepare('SELECT * FROM work_reports WHERE id = ?').get(id));

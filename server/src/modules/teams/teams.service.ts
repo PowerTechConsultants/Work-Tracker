@@ -34,9 +34,12 @@ export class TeamsService {
   }
 
   static async create(input: { teamName: string; memberIds: string[]; leaderId?: string }) {
-    const c = (await db.prepare('SELECT count(*) as c FROM team_members WHERE team_name = ?').get(input.teamName) as any).c;
-    if (c > 0) throw new AppError(409, 'Team name already exists');
+    if (input.leaderId && !input.memberIds.includes(input.leaderId)) {
+      throw new AppError(400, 'Leader must be a team member');
+    }
     await db.transaction(async () => {
+      const c = (await db.prepare('SELECT count(*) as c FROM team_members WHERE team_name = ?').get(input.teamName) as any).c;
+      if (c > 0) throw new AppError(409, 'Team name already exists');
       if (input.memberIds.length > 0) {
         const ph = input.memberIds.map(() => '(?, ?, ?)').join(', ');
         const p: any[] = [];

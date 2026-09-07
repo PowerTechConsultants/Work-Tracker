@@ -240,7 +240,8 @@ export class TasksService {
       if (!a) throw new AppError(404, 'Approval not found');
       if (a.status !== 'pending') throw new AppError(409, 'Already reviewed');
       if (a.requested_by_id === reviewedById) throw new AppError(403, 'Cannot review your own approval request');
-      await db.prepare("UPDATE task_approvals SET status = ?, reviewed_by_id = ?, comment = ?, reviewed_at = datetime('now') WHERE id = ? AND status = 'pending'").run(status, reviewedById, comment ?? null, approvalId);
+      const result = await db.prepare("UPDATE task_approvals SET status = ?, reviewed_by_id = ?, comment = ?, reviewed_at = datetime('now') WHERE id = ? AND status = 'pending'").run(status, reviewedById, comment ?? null, approvalId);
+      if (result.changes === 0) throw new AppError(409, 'Already reviewed');
       await db.prepare('INSERT INTO notifications (id, recipient_id, sender_id, title, message, type, link) VALUES (?, ?, ?, ?, ?, ?, ?)')
         .run(uuid(), a.requested_by_id, reviewedById, `Task ${status}`, `Your task approval has been ${status}`, status === 'approved' ? 'success' : 'warning', `/tasks/${a.task_id}`);
       return await db.prepare('SELECT id, task_id, requested_by_id, status, request_comment, reviewed_by_id, comment, requested_at, reviewed_at FROM task_approvals WHERE id = ?').get(approvalId);

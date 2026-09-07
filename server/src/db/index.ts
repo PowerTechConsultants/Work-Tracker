@@ -107,7 +107,11 @@ const db = {
     }
     let finalSql = translateSql(sql);
     if (finalSql.includes('ON CONFLICT')) {
-      finalSql = finalSql.replace(/ON CONFLICT\([^)]+\) DO UPDATE SET (.+?)(?:, updated_at = (?:datetime\('now'\)|NOW\(\)))?$/s, (_match: string, setClause: string) => `ON DUPLICATE KEY UPDATE ${setClause}, updated_at = NOW()`);
+      finalSql = finalSql.replace(/ON CONFLICT\([^)]+\) DO UPDATE SET (.+?)(?:, updated_at = (?:datetime\('now'\)|NOW\(\)))?$/s, (_match: string, setClause: string) => {
+        // Replace excluded.col with VALUES(col) for MySQL
+        const mysqlSet = setClause.replace(/excluded\.(\w+)/g, 'VALUES($1)');
+        return `ON DUPLICATE KEY UPDATE ${mysqlSet}, updated_at = NOW()`;
+      });
       finalSql = finalSql.replace(/ON CONFLICT\([^)]+\) DO NOTHING/g, 'ON DUPLICATE KEY UPDATE id=id');
       finalSql = finalSql.replace(/INSERT OR REPLACE/g, 'REPLACE').replace(/INSERT OR IGNORE/g, 'INSERT IGNORE');
     }
