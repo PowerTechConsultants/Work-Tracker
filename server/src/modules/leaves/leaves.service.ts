@@ -270,6 +270,8 @@ export class LeavesService {
       return mapLeave(await db.prepare('SELECT l.*, u.first_name, u.last_name, u.employee_id FROM leaves l JOIN users u ON l.user_id = u.id WHERE l.id = ?').get(id));
     }))();
 
+    if (isAutoApprove) await cache.delByPrefix(`${userId}:/api/v1/leaves/balance`);
+
     try {
       if (isAutoApprove) {
         getIO().to(`user:${userId}`).emit('leave:reviewed', leaveRecord);
@@ -432,6 +434,7 @@ export class LeavesService {
         try { await sendLeaveNotification({ id: leave.id, type: leave.type, startDate: leave.start_date, endDate: leave.end_date, reason: leave.reason ?? undefined }, status as 'approved' | 'rejected', { id: employee.id, email: employee.email, firstName: employee.first_name, lastName: employee.last_name }); } catch (e: any) { console.error('[Email] Failed:', e.message); }
       }
     })();
+    await cache.delByPrefix(`${leave.user_id}:/api/v1/leaves/balance`);
     const updated = mapLeave(await db.prepare('SELECT l.*, u.first_name, u.last_name, u.employee_id FROM leaves l JOIN users u ON l.user_id = u.id WHERE l.id = ?').get(id));
     try { getIO().to(`user:${leave.user_id}`).emit('leave:reviewed', updated); } catch (e) { console.error('[Leaves] Socket emit failed:', e); }
     return updated;
@@ -467,5 +470,6 @@ export class LeavesService {
         .run(uuid(), userId, 'cancel_leave', 'leave', id, JSON.stringify({ status: leave.status }), JSON.stringify({ status: 'cancelled' }), null);
       return mapLeave(await db.prepare('SELECT l.id, l.user_id, l.type, l.start_date, l.end_date, l.reason, l.status, l.review_comment, l.reviewed_by_id, l.reviewed_at, l.deducted_from, l.extra, l.leave_year, l.created_at, l.updated_at, u.first_name, u.last_name, u.employee_id FROM leaves l JOIN users u ON l.user_id = u.id WHERE l.id = ?').get(id));
     })();
+    await cache.delByPrefix(`${leave.user_id}:/api/v1/leaves/balance`);
   }
 }
