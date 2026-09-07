@@ -41,7 +41,7 @@ export class UsersService {
     if (role) { conditions.push('role = ?'); params.push(role); }
     if (status) { conditions.push('status = ?'); params.push(status); }
     if (departmentId) { conditions.push('department_id = ?'); params.push(departmentId); }
-    if (search) { const escaped = search.replace(/[\\%_]/g, '\\$&'); conditions.push('(first_name LIKE ? ESCAPE "\\" OR last_name LIKE ? ESCAPE "\\" OR email LIKE ? ESCAPE "\\" OR employee_id LIKE ? ESCAPE "\\")'); params.push(`%${escaped}%`, `%${escaped}%`, `%${escaped}%`, `%${escaped}%`); }
+    if (search) { const escaped = search.replace(/[\\%_]/g, '\\$&'); conditions.push("(first_name LIKE ? ESCAPE '\\\\' OR last_name LIKE ? ESCAPE '\\\\' OR email LIKE ? ESCAPE '\\\\' OR employee_id LIKE ? ESCAPE '\\\\')"); params.push(`%${escaped}%`, `%${escaped}%`, `%${escaped}%`, `%${escaped}%`); }
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     const count = (await db.prepare(`SELECT count(*) as c FROM users ${where}`).get(...params) as any).c;

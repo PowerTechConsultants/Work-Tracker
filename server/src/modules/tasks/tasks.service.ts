@@ -73,7 +73,7 @@ export class TasksService {
       params.push(...priorities);
     }
     if (departmentId) { conds.push('t.department_id = ?'); params.push(departmentId); }
-    if (search) { conds.push("t.title LIKE ? ESCAPE '\\'"); params.push(`%${search.replace(/[\\%_]/g, (c: string) => '\\' + c)}%`); }
+    if (search) { conds.push("t.title LIKE ? ESCAPE '\\\\'"); params.push(`%${search.replace(/[\\%_]/g, (c: string) => '\\' + c)}%`); }
     if (dueBefore) { conds.push('t.due_date < ?'); params.push(new Date(dueBefore).toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '')); }
     if (dueAfter) { conds.push('t.due_date > ?'); params.push(new Date(dueAfter).toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '')); }
     if (assigneeId) {

@@ -66,7 +66,7 @@ export const cache = {
   async delByPrefix(prefix: string): Promise<void> {
     l1DelByPrefix(prefix);
     const escaped = prefix.replace(/[%_]/g, '\\$&');
-    await db.prepare('DELETE FROM api_cache WHERE cache_key LIKE ? ESCAPE "\\"').run(`${escaped}%`);
+    await db.prepare("DELETE FROM api_cache WHERE cache_key LIKE ? ESCAPE '\\\\'").run(`${escaped}%`);
   },
 
   async flush(): Promise<void> {
