@@ -155,7 +155,7 @@ export class TasksService {
         }
         sets.push('status = ?'); params.push(input.status);
         if (input.status === 'in_progress' && !existing.started_at) sets.push("started_at = datetime('now')");
-        if (input.status === 'completed') { sets.push("completed_at = datetime('now')"); }
+        if (input.status === 'completed' && current !== 'completed') { sets.push("completed_at = datetime('now')"); }
         if (input.status !== 'completed') sets.push('completed_at = NULL');
         if (input.status === 'pending') sets.push('started_at = NULL');
       }

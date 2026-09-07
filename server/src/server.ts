@@ -49,12 +49,10 @@ if (enableHttps) {
 initializeSocket(server);
 startAutoAbsentScheduler();
 const cleanupTimer = setInterval(async () => {
-  try {
-    await db.prepare("DELETE FROM token_blacklist WHERE expires_at <= NOW()").run();
-    await db.prepare("DELETE FROM rate_limits WHERE expires_at <= NOW()").run();
-    await db.prepare("DELETE FROM refresh_tokens WHERE expires_at <= NOW()").run();
-    await db.prepare("DELETE FROM api_cache WHERE expires_at <= NOW()").run();
-  } catch (e) { console.error('[Cleanup] Timer error:', e); }
+  try { await db.prepare("DELETE FROM token_blacklist WHERE expires_at <= NOW()").run(); } catch (e) { console.error('[Cleanup] token_blacklist:', e); }
+  try { await db.prepare("DELETE FROM rate_limits WHERE expires_at <= NOW()").run(); } catch (e) { console.error('[Cleanup] rate_limits:', e); }
+  try { await db.prepare("DELETE FROM refresh_tokens WHERE expires_at <= NOW()").run(); } catch (e) { console.error('[Cleanup] refresh_tokens:', e); }
+  try { await db.prepare("DELETE FROM api_cache WHERE expires_at <= NOW()").run(); } catch (e) { console.error('[Cleanup] api_cache:', e); }
 }, 60 * 60 * 1000);
 
 const port = config.port;

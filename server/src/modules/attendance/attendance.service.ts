@@ -120,6 +120,7 @@ export class AttendanceService {
     const today = getISTDate();
     const rec = await db.prepare('SELECT * FROM attendance WHERE user_id = ? AND date = ?').get(userId, today) as any;
     if (!rec) throw new AppError(404, 'No check-in found for today');
+    if (!rec.login_time) throw new AppError(400, 'No check-in found for today');
     if (rec.logout_time) throw new AppError(409, 'Already checked out today');
     if (rec.pause_start_time && !rec.pause_end_time) {
       // Ensure status is on_break even if previous update failed
@@ -165,6 +166,7 @@ export class AttendanceService {
     const today = getISTDate();
     const rec = await db.prepare('SELECT * FROM attendance WHERE user_id = ? AND date = ?').get(userId, today) as any;
     if (!rec) throw new AppError(404, 'No check-in found for today');
+    if (!rec.login_time) throw new AppError(400, 'No check-in found for today');
     if (rec.logout_time) throw new AppError(409, 'Already checked out today');
 
     const now = new Date();

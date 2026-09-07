@@ -1,4 +1,5 @@
 import db from '../db';
+import { parseUTC } from './time';
 
 const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
 
@@ -12,8 +13,8 @@ export async function revokeUserTokens(userId: string) {
 export async function isTokenRevoked(userId: string, issuedAt?: number): Promise<boolean> {
   const row = await db.prepare("SELECT revoked_at FROM token_blacklist WHERE user_id = ? AND expires_at > NOW()").get(userId) as any;
   if (!row) return false;
-  // revoked_at is a DATETIME string like '2024-01-15 10:30:00' — parse to timestamp
-  const revokedTs = new Date(row.revoked_at).getTime() / 1000;
+  // revoked_at is a DATETIME string — parse as UTC to match JWT iat
+  const revokedTs = parseUTC(row.revoked_at).getTime() / 1000;
   if (isNaN(revokedTs)) return true;
   return revokedTs > (issuedAt ?? 0);
 }

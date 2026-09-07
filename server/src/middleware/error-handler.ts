@@ -23,7 +23,9 @@ export function errorHandler(err: Error, req: Request, res: Response, _next: Nex
     status = err.statusCode;
   } else if (err.message.includes('Duplicate entry') || err.message.includes('UNIQUE constraint failed')) {
     status = 409;
-  } else if (err.message.includes('Cannot add or update a child row')) {
+  } else if (err.message.includes('Cannot add or update a child row') || err.message.includes('FOREIGN KEY constraint failed') || err.message.includes('ER_NO_REFERENCED_ROW')) {
+    status = 400;
+  } else if (err.message.includes('NOT NULL constraint failed') || err.message.includes('cannot be null') || err.message.includes('CHECK constraint failed')) {
     status = 400;
   } else {
     status = 500;
