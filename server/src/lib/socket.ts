@@ -105,9 +105,13 @@ export function initializeSocket(httpServer: HttpServer) {
     });
 
     socket.on('join-team', async (teamName: string) => {
-      const membership = await db.prepare('SELECT 1 FROM team_members WHERE team_name = ? AND user_id = ?').get(teamName, user.sub);
-      if (membership) {
-        socket.join(`team:${teamName}`);
+      try {
+        const membership = await db.prepare('SELECT 1 FROM team_members WHERE team_name = ? AND user_id = ?').get(teamName, user.sub);
+        if (membership) {
+          socket.join(`team:${teamName}`);
+        }
+      } catch (e) {
+        console.error('[Socket] join-team error:', e);
       }
     });
 
@@ -122,6 +126,11 @@ export function initializeSocket(httpServer: HttpServer) {
       }
       try {
         const payload = verifyAccessToken(data.token);
+        // Only allow refreshing to the same user (prevents impersonation)
+        if (payload.sub !== user.sub) {
+          socket.emit('socket:error', { message: 'Token belongs to different user' });
+          return;
+        }
         if (await isTokenRevoked(payload.sub, payload.iat)) {
           socket.emit('socket:error', { message: 'Token revoked' });
           return;
