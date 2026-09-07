@@ -3,7 +3,7 @@ import { getIO } from '../../lib/socket';
 import { cache } from '../../lib/cache';
 import { AppError } from '../../lib/app-error';
 
-const PROTECTED_STATUSES = "('present','work_end','on_break','half_day','leave')";
+const PROTECTED_STATUSES = "('present','work_end','on_break','half_day','leave','remote')";
 
 async function notifyUsers(userIds: string[], senderId: string, title: string, message: string, link?: string) {
   if (!userIds || userIds.length === 0) return;

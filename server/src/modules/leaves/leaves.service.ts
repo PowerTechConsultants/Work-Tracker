@@ -37,7 +37,7 @@ function invalidateAnalyticsCache() {
   }
 }
 
-const PROTECTED_STATUSES = "('present','work_end','on_break','half_day','holiday')";
+const PROTECTED_STATUSES = "('present','work_end','on_break','half_day','holiday','remote')";
 
 function mapLeave(l: any) {
   return {

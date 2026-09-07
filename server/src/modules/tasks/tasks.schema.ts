@@ -26,7 +26,15 @@ export const listTasksSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   status: z.enum(['pending', 'in_progress', 'completed', 'on_hold', 'cancelled']).optional(),
+  statuses: z.preprocess(
+    (val) => (val === undefined || val === null ? val : Array.isArray(val) ? val : [val]),
+    z.array(z.enum(['pending', 'in_progress', 'completed', 'on_hold', 'cancelled'])).optional()
+  ),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
+  priorities: z.preprocess(
+    (val) => (val === undefined || val === null ? val : Array.isArray(val) ? val : [val]),
+    z.array(z.enum(['low', 'medium', 'high', 'urgent'])).optional()
+  ),
   assigneeId: z.string().trim().min(1).optional(),
   assigneeIds: z.preprocess(
     (val) => (val === undefined || val === null ? val : Array.isArray(val) ? val : [val]),

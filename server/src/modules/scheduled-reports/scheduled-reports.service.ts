@@ -1,5 +1,6 @@
 import db, { uuid } from '../../db';
 import { AppError } from '../../lib/app-error';
+import { getISTDate } from '../../lib/time';
 import type { CreateScheduleInput, UpdateScheduleInput, ListSchedulesInput } from './scheduled-reports.schema';
 
 function mapSchedule(r: any) {
@@ -116,13 +117,12 @@ export class ScheduledReportsService {
 
       // Generate report data based on template type
       let reportData: any = {};
+      const today = getISTDate();
       if (template?.type === 'daily') {
-        const today = new Date().toISOString().split('T')[0];
         const reports = await db.prepare('SELECT * FROM work_reports WHERE date = ?').all(today);
         reportData = { date: today, reports, count: reports.length };
       } else if (template?.type === 'weekly') {
         const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
-        const today = new Date().toISOString().split('T')[0];
         const reports = await db.prepare('SELECT * FROM work_reports WHERE date >= ? AND date <= ?').all(weekAgo, today);
         reportData = { startDate: weekAgo, reports, count: reports.length };
       } else {
