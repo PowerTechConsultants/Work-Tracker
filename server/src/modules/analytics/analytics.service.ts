@@ -96,8 +96,13 @@ export class AnalyticsService {
     const totalByType: Record<string, number> = {};
     for (const t of types) totalByType[t] = 0;
 
-    // Fetch holidays for the year to exclude them from leave counting
-    const holidays = (await db.prepare('SELECT date FROM holidays WHERE date >= ? AND date <= ?').all(start, end) as any[]).map((h: any) => h.date);
+    // Fetch company-wide holidays (no assignees) for the year to exclude them from leave counting
+    const holidays = (await db.prepare(`
+      SELECT h.date FROM holidays h
+      LEFT JOIN holiday_assignees ha ON ha.holiday_id = h.id
+      WHERE h.date >= ? AND h.date <= ?
+      GROUP BY h.id HAVING COUNT(ha.user_id) = 0
+    `).all(start, end) as any[]).map((h: any) => h.date);
 
     for (const l of leaves) {
       const parseDate = (s: string) => new Date(`${s}T00:00:00.000Z`);
