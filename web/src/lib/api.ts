@@ -98,3 +98,8 @@ export const scheduledReportsApi = {
   run: (id: string) => api.post(`/scheduled-reports/${id}/run`),
   results: (id: string) => api.get(`/scheduled-reports/${id}/results`),
 };
+
+export const overtimeApi = {
+  getMy: (year: number, month: number) => api.get(`/attendance/overtime/my/${year}/${month}`),
+  getAll: (year: number, month: number) => api.get(`/attendance/overtime/${year}/${month}`),
+};

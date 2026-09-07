@@ -4,7 +4,6 @@ import { getIO } from '../../lib/socket';
 import { cache } from '../../lib/cache';
 import { AppError } from '../../lib/app-error';
 
-const STANDARD_WORKDAY_HOURS = 8;
 const HALF_DAY_THRESHOLD = 4;
 
 function invalidateAnalyticsCache() {
@@ -183,14 +182,13 @@ export class AttendanceService {
     const rawHours = Math.round((totalMs / 3600000) * 100) / 100;
     const pauseHours = Math.round((pauseMinutes / 60) * 100) / 100;
     const workingHours = Math.max(0, Math.round((rawHours - pauseHours) * 100) / 100);
-    const overtimeHours = Math.max(0, Math.round((workingHours - STANDARD_WORKDAY_HOURS) * 100) / 100);
     const status = rec.status === 'remote' ? 'remote' : (workingHours < HALF_DAY_THRESHOLD ? 'half_day' : 'work_end');
 
     await db.prepare(`UPDATE attendance SET
-      logout_time = ?, working_hours = ?, overtime_hours = ?,
+      logout_time = ?, working_hours = ?, overtime_hours = 0,
       pause_minutes = ?, pause_end_time = COALESCE(pause_end_time, ?),
       status = ?, updated_at = ? WHERE id = ?`)
-      .run(nowIso, workingHours, overtimeHours, pauseMinutes, rec.pause_start_time ? nowIso : null, status, nowIso, rec.id);
+      .run(nowIso, workingHours, pauseMinutes, rec.pause_start_time ? nowIso : null, status, nowIso, rec.id);
 
     const updated = await db.prepare('SELECT * FROM attendance WHERE id = ?').get(rec.id);
     logEvent(rec.id, userId, 'check_out', input, nowIso);
@@ -360,10 +358,72 @@ export class AttendanceService {
       FROM attendance WHERE user_id = ? AND date >= ? AND date <= ? AND logout_time IS NOT NULL`).get(userId, start, end) as any;
 
     const totalWorkingHours = agg.total_working_hours;
-    const totalOvertimeHours = agg.total_overtime_hours;
-    const regularHours = Math.max(0, totalWorkingHours - totalOvertimeHours);
     const totalPauseMinutes = agg.total_pause_minutes;
 
-    return { year, month, summary, totalWorkingHours, totalOvertimeHours, overtimeDays: Math.floor(totalOvertimeHours / 8), regularHours, totalPauseMinutes };
+    const overtimeRow = await db.prepare('SELECT standard_hours, actual_hours, overtime_hours FROM monthly_overtime WHERE user_id = ? AND year = ? AND month = ?').get(userId, year, month) as any;
+    const totalOvertimeHours = overtimeRow?.overtime_hours ?? 0;
+    const standardHours = overtimeRow?.standard_hours ?? 0;
+
+    return { year, month, summary, totalWorkingHours, totalOvertimeHours, standardHours, regularHours: totalWorkingHours - totalOvertimeHours, totalPauseMinutes };
+  }
+
+  static async calculateMonthlyOvertime(userId: string, year: number, month: number): Promise<void> {
+    const start = `${year}-${String(month).padStart(2, '0')}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const end = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+    const agg = await db.prepare(`SELECT
+      COALESCE(SUM(working_hours), 0) as total_working_hours
+      FROM attendance WHERE user_id = ? AND date >= ? AND date <= ? AND logout_time IS NOT NULL`).get(userId, start, end) as any;
+    const actualHours = agg.total_working_hours;
+
+    const totalDays = lastDay;
+    let sundays = 0;
+    for (let d = 1; d <= totalDays; d++) {
+      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const dow = new Date(Date.UTC(year, month - 1, d)).getUTCDay();
+      if (dow === 0) sundays++;
+    }
+
+    const holidayCount = (await db.prepare('SELECT COUNT(*) as c FROM holidays WHERE date >= ? AND date <= ?').get(start, end) as any).c;
+    const workingDays = totalDays - sundays - holidayCount;
+    const standardHours = workingDays * 8;
+    const overtimeHours = Math.max(0, Math.round((actualHours - standardHours) * 100) / 100);
+
+    const id = uuid();
+    await db.prepare(
+      "INSERT INTO monthly_overtime (id, user_id, year, month, standard_hours, actual_hours, overtime_hours, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW()) ON DUPLICATE KEY UPDATE actual_hours = VALUES(actual_hours), overtime_hours = VALUES(overtime_hours), updated_at = NOW()"
+    ).run(id, userId, year, month, standardHours, actualHours, overtimeHours);
+  }
+
+  static async getMonthlyOvertime(userId: string, year: number, month: number) {
+    const row = await db.prepare('SELECT * FROM monthly_overtime WHERE user_id = ? AND year = ? AND month = ?').get(userId, year, month) as any;
+    if (!row) {
+      await this.calculateMonthlyOvertime(userId, year, month);
+      return await db.prepare('SELECT * FROM monthly_overtime WHERE user_id = ? AND year = ? AND month = ?').get(userId, year, month);
+    }
+    return row;
+  }
+
+  static async getMonthlyOvertimeAll(year: number, month: number) {
+    return await db.prepare(`
+      SELECT mo.*, u.first_name, u.last_name, u.employee_id, d.name as department_name
+      FROM monthly_overtime mo
+      JOIN users u ON mo.user_id = u.id
+      LEFT JOIN departments d ON u.department_id = d.id
+      WHERE mo.year = ? AND mo.month = ?
+      ORDER BY u.first_name, u.last_name
+    `).all(year, month);
+  }
+
+  static async recalculateAllOvertime(year: number, month: number): Promise<void> {
+    const users = await db.prepare("SELECT id FROM users WHERE status = 'active'").all() as any[];
+    for (const user of users) {
+      try {
+        await this.calculateMonthlyOvertime(user.id, year, month);
+      } catch (e: any) {
+        console.error(`[Attendance] Overtime calc failed for ${user.id}:`, e.message);
+      }
+    }
   }
 }

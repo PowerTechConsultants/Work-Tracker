@@ -131,4 +131,22 @@ router.delete('/bulk', requireRole('director'), validate(deleteAttendanceSchema)
   } catch (err) { next(err); }
 });
 
+router.get('/overtime/:year/:month', requireRole('director', 'hr'), async (req: Request, res: Response, next) => {
+  try {
+    const year = Math.min(2100, Math.max(2000, parseInt(req.params.year ?? '') || new Date().getFullYear()));
+    const month = Math.min(12, Math.max(1, parseInt(req.params.month ?? '') || new Date().getMonth() + 1));
+    const result = await AttendanceService.getMonthlyOvertimeAll(year, month);
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+router.get('/overtime/my/:year/:month', async (req: Request, res: Response, next) => {
+  try {
+    const year = Math.min(2100, Math.max(2000, parseInt(req.params.year ?? '') || new Date().getFullYear()));
+    const month = Math.min(12, Math.max(1, parseInt(req.params.month ?? '') || new Date().getMonth() + 1));
+    const result = await AttendanceService.getMonthlyOvertime(req.user!.sub, year, month);
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
 export default router;

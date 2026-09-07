@@ -30,14 +30,6 @@ async function countWorkingDays(userId: string, start: string, end: string): Pro
 
 async function getExcludedDates(userId: string, start: string, end: string): Promise<Set<string>> {
   const excluded = new Set<string>();
-  const cur = new Date(`${start}T00:00:00Z`);
-  const endD = new Date(`${end}T00:00:00Z`);
-  while (cur <= endD) {
-    const iso = cur.toISOString().split('T')[0]!;
-    const dow = cur.getUTCDay();
-    if (dow === 0) excluded.add(iso); // Sunday
-    cur.setUTCDate(cur.getUTCDate() + 1);
-  }
   const holidays = await db.prepare('SELECT id, date FROM holidays WHERE date BETWEEN ? AND ?').all(start, end) as any[];
   const holidayIds = holidays.map((h: any) => h.id);
   const userAssignees = new Set<string>();

@@ -561,6 +561,27 @@ const migrations: Array<{ version: number; name: string; up: () => Promise<void>
       `);
     },
   },
+  {
+    version: 17,
+    name: 'monthly-overtime-table',
+    up: async () => {
+      await db.exec(`
+        CREATE TABLE IF NOT EXISTS monthly_overtime (
+          id VARCHAR(36) PRIMARY KEY,
+          user_id VARCHAR(36) NOT NULL,
+          year INT NOT NULL,
+          month INT NOT NULL,
+          standard_hours DECIMAL(10,2) NOT NULL DEFAULT 0,
+          actual_hours DECIMAL(10,2) NOT NULL DEFAULT 0,
+          overtime_hours DECIMAL(10,2) NOT NULL DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY unique_user_month (user_id, year, month)
+        );
+        CREATE INDEX IF NOT EXISTS idx_monthly_overtime_user ON monthly_overtime(user_id, year, month);
+      `);
+    },
+  },
 ];
 
 await db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (

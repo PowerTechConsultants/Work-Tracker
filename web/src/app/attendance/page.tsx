@@ -677,6 +677,10 @@ export default function AttendancePage() {
                 <p className="text-lg font-bold text-white mt-1">{formatDuration(getDisplayWorkingHours(today, now))}</p>
               </div>
               <div className="bg-slate-800 rounded-xl p-3">
+                <p className="text-xs text-slate-400">Standard Hours</p>
+                <p className="text-lg font-bold text-slate-300 mt-1">{formatHoursDays(monthly.standardHours ?? 0)}</p>
+              </div>
+              <div className="bg-slate-800 rounded-xl p-3">
                 <p className="text-xs text-slate-400">Overtime</p>
                 <p className="text-lg font-bold text-amber-400 mt-1">{formatOvertime(monthly.totalOvertimeHours)}</p>
               </div>

@@ -97,11 +97,11 @@ async function markAbsentForDay(date: string, skipUserIds: string[]) {
 }
 
 async function processDay(date: string) {
-  if (isSundayIST(date)) return;
-
     // Check for holidays
     if (await isCompanyWideHoliday(date)) return; // Company-wide holiday — skip everyone
     const holidayUserIds = await skipUsersForHoliday(date);
+    // Sunday is optional — don't mark absent on Sundays
+    if (isSundayIST(date)) return;
     await markAbsentForDay(date, holidayUserIds);
 }
 

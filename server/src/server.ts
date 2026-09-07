@@ -10,6 +10,7 @@ import { runAnnualLeaveReset } from './lib/leave-reset';
 import { cleanupExpiredBlacklistEntries } from './lib/blacklist';
 import { ensureAdminBootstrap } from './db/bootstrap';
 import db, { pool } from './db';
+import { AttendanceService } from './modules/attendance/attendance.service';
 
 await ensureAdminBootstrap();
 
@@ -56,6 +57,27 @@ const cleanupTimer = setInterval(async () => {
   try { await db.prepare("DELETE FROM refresh_tokens WHERE expires_at <= NOW()").run(); } catch (e) { console.error('[Cleanup] refresh_tokens:', e); }
   try { await db.prepare("DELETE FROM api_cache WHERE expires_at <= NOW()").run(); } catch (e) { console.error('[Cleanup] api_cache:', e); }
 }, 60 * 60 * 1000);
+
+const overtimeTimer = setInterval(async () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const lastDay = new Date(year, month, 0).getDate();
+  const isLastDay = now.getDate() === lastDay;
+  const isNearMidnight = now.getHours() === 23 && now.getMinutes() >= 55;
+  if (isLastDay && isNearMidnight) {
+    const lastCalc = await db.prepare("SELECT value FROM app_settings WHERE `key` = 'monthly_overtime_last_calc'").get() as any;
+    const calcKey = `${year}-${month}`;
+    if (lastCalc?.value !== calcKey) {
+      console.log(`[Overtime] Running monthly overtime calculation for ${year}-${month}`);
+      try {
+        await AttendanceService.recalculateAllOvertime(year, month);
+        await db.prepare("INSERT INTO app_settings (`key`, value, updated_at) VALUES (?, ?, NOW()) ON DUPLICATE KEY UPDATE value = VALUES(value), updated_at = NOW()").run('monthly_overtime_last_calc', calcKey);
+        console.log(`[Overtime] Completed for ${year}-${month}`);
+      } catch (e) { console.error('[Overtime] Calculation error:', e); }
+    }
+  }
+}, 60 * 1000);
 
 const port = config.port;
 server.listen(port, '0.0.0.0', () => {
