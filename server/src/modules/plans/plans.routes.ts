@@ -52,7 +52,7 @@ router.post('/', validate(createPlanSchema), async (req: Request, res: Response,
 
 router.patch('/:id', requireUuid('id'), validate(updatePlanSchema), async (req: Request, res: Response, next) => {
   try {
-    const plan = await PlansService.update(req.params.id!, req.user!.sub, req.body);
+    const plan = await PlansService.update(req.params.id!, req.user!.sub, req.body, req.user!.role);
     res.json(plan);
   } catch (err) { next(err); }
 });

@@ -4,7 +4,7 @@ export const createHolidaySchema = z.object({
   date: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD'),
   name: z.string().trim().min(1, 'Holiday name is required').max(200),
   type: z.enum(['public', 'custom']).default('public'),
-  userIds: z.array(z.string().trim()).optional(),
+  userIds: z.array(z.string().trim().uuid()).optional(),
 });
 
 export const listHolidaysSchema = z.object({

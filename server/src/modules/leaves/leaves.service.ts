@@ -180,9 +180,11 @@ async function computeUsage(userId: string, year: number): Promise<LeaveUsage> {
 
 async function computeRequestExtra(userId: string, year: number, requestedDays: number): Promise<number> {
   const usage = await computeUsage(userId, year);
-  const usedSoFar = usage.used + usage.extraUsed; // days already attributed across all requests this year
+  const usedSoFar = usage.used + usage.extraUsed;
   const entitlement = await entitlementForYear(userId, year);
-  const available = Math.max(0, entitlement.total - usedSoFar);
+  const carryRow = await db.prepare('SELECT proposal_carryforward FROM leave_carryforwards WHERE user_id = ? AND year = ?').get(userId, year) as any;
+  const carryover = carryRow?.proposal_carryforward ?? 0;
+  const available = Math.max(0, entitlement.total + carryover - usedSoFar);
   return Math.max(0, requestedDays - available);
 }
 
@@ -326,7 +328,10 @@ export class LeavesService {
     const rows = await db.prepare(`SELECT type, start_date, end_date FROM leaves WHERE user_id = ? AND status = 'approved' AND start_date <= ? AND end_date >= ? ORDER BY created_at ASC`).all(userId, end, start) as any[];
 
     const entitlement = await entitlementForYear(userId, currentYear);
-    const pools: Record<string, number> = { casual: entitlement.casual, sick: entitlement.sick, proposal: entitlement.proposal };
+    const carryRow = await db.prepare('SELECT proposal_carryforward FROM leave_carryforwards WHERE user_id = ? AND year = ?').get(userId, currentYear) as any;
+    const carryover = carryRow?.proposal_carryforward ?? 0;
+
+    const pools: Record<string, number> = { casual: entitlement.casual, sick: entitlement.sick, proposal: entitlement.proposal + carryover };
     const spillOrder = ['casual', 'sick', 'proposal'] as const;
     const allHolidays = await db.prepare('SELECT id, date FROM holidays WHERE date BETWEEN ? AND ?').all(start, end) as any[];
     const holidayCache = new Map<string, any[]>();
@@ -358,13 +363,10 @@ export class LeavesService {
     const balances: Record<string, { total: number; used: number; remaining: number }> = {
       casual: { total: entitlement.casual, used: entitlement.casual - remainingOf('casual'), remaining: remainingOf('casual') },
       sick: { total: entitlement.sick, used: entitlement.sick - remainingOf('sick'), remaining: remainingOf('sick') },
-      proposal: { total: entitlement.proposal, used: entitlement.proposal - remainingOf('proposal'), remaining: remainingOf('proposal') },
+      proposal: { total: entitlement.proposal + carryover, used: entitlement.proposal + carryover - remainingOf('proposal'), remaining: remainingOf('proposal') },
     };
 
     const totalBalance = entitlement.total;
-    // Carryover: stored in leave_carryforwards table (computed by annual reset on Jan 1)
-    const carryRow = await db.prepare('SELECT proposal_carryforward FROM leave_carryforwards WHERE user_id = ? AND year = ?').get(userId, currentYear) as any;
-    const carryover = carryRow?.proposal_carryforward ?? 0;
     const totalAvailable = totalBalance + carryover;
     const totalRemaining = Math.max(0, totalAvailable - usage.used);
 
@@ -460,7 +462,7 @@ export class LeavesService {
       if (workedToday && role !== 'director') throw new AppError(409, 'Cannot cancel leave: the user has already worked today');
     }
 
-    return await db.transaction(async () => {
+    const result = await db.transaction(async () => {
       await db.prepare("UPDATE leaves SET status = 'cancelled', updated_at = datetime('now') WHERE id = ?").run(id);
       const dates = iterDates(leave.start_date, leave.end_date);
       const placeholders = dates.map(() => '?').join(',');
@@ -471,5 +473,6 @@ export class LeavesService {
       return mapLeave(await db.prepare('SELECT l.id, l.user_id, l.type, l.start_date, l.end_date, l.reason, l.status, l.review_comment, l.reviewed_by_id, l.reviewed_at, l.deducted_from, l.extra, l.leave_year, l.created_at, l.updated_at, u.first_name, u.last_name, u.employee_id FROM leaves l JOIN users u ON l.user_id = u.id WHERE l.id = ?').get(id));
     })();
     await cache.delByPrefix(`${leave.user_id}:/api/v1/leaves/balance`);
+    return result;
   }
 }

@@ -81,7 +81,9 @@ router.post('/refresh', async (req: Request, res: Response, next) => {
 router.post('/logout', async (req: Request, res: Response, next) => {
   try {
     const refreshToken = req.cookies?.refreshToken;
-    if (refreshToken) await AuthService.logout(refreshToken);
+    if (refreshToken) {
+      try { await AuthService.logout(refreshToken); } catch (e) { /* token already invalid, still clear cookies */ }
+    }
     res.clearCookie('refreshToken', { path: '/api/v1/auth', httpOnly: true, sameSite: 'strict', secure: isProduction });
     res.clearCookie('accessToken', { path: '/', httpOnly: true, sameSite: 'strict', secure: isProduction });
     res.json({ message: 'Logged out' });

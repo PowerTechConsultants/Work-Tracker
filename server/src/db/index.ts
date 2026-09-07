@@ -36,6 +36,7 @@ try {
   }
 } catch (e: any) {
   console.error('[DB] MySQL connection failed:', e.message);
+  process.exit(1);
 }
 
 function translateSql(sql: string): string {

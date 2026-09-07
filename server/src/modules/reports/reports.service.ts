@@ -53,10 +53,10 @@ export class ReportsService {
     return mapReport(r);
   }
 
-  static async update(id: string, userId: string, input: any) {
+  static async update(id: string, userId: string, input: any, role?: string) {
     const report = await db.prepare('SELECT * FROM work_reports WHERE id = ?').get(id) as any;
     if (!report) throw new AppError(404, 'Report not found');
-    if (report.user_id !== userId) throw new AppError(403, 'Cannot update others report');
+    if (role !== 'director' && role !== 'hr' && report.user_id !== userId) throw new AppError(403, 'Cannot update others report');
     if (report.status !== 'draft') throw new AppError(409, 'Only draft reports can be updated');
     const sets = ["updated_at = datetime('now')"]; const params: any[] = [];
     if (input.workCompletedToday !== undefined) { sets.push('work_completed_today = ?'); params.push(input.workCompletedToday); }

@@ -265,12 +265,13 @@ export class TasksService {
   }
 
   static async getEmployeeProgress() {
+    const today = getISTDate();
     const rows = await db.prepare(`
       SELECT u.id, u.first_name, u.last_name, u.employee_id,
         COUNT(t.id) as total_tasks,
         SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) as completed,
         SUM(CASE WHEN t.status = 'in_progress' THEN 1 ELSE 0 END) as in_progress,
-        SUM(CASE WHEN t.status NOT IN ('completed','cancelled') AND t.due_date < datetime('now') THEN 1 ELSE 0 END) as overdue,
+        SUM(CASE WHEN t.status NOT IN ('completed','cancelled') AND t.due_date < CONCAT(?, ' 00:00:00') THEN 1 ELSE 0 END) as overdue,
         ROUND(AVG(t.progress_percent), 0) as avg_progress
       FROM users u
       JOIN task_assignments ta ON ta.user_id = u.id
@@ -278,7 +279,7 @@ export class TasksService {
       WHERE u.status = 'active'
       GROUP BY u.id
       ORDER BY u.first_name
-    `).all() as any[];
+    `).all(today) as any[];
     return rows.map((r: any) => ({
       userId: r.id, firstName: r.first_name, lastName: r.last_name, employeeId: r.employee_id,
       totalTasks: r.total_tasks, completed: r.completed, inProgress: r.in_progress,

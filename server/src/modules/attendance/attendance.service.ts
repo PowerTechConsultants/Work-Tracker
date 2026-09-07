@@ -392,6 +392,8 @@ export class AttendanceService {
     const allHolidays = await db.prepare('SELECT id, date FROM holidays WHERE date >= ? AND date <= ?').all(start, end) as any[];
     let userHolidayCount = 0;
     for (const h of allHolidays) {
+      const dow = new Date(h.date + 'T00:00:00Z').getUTCDay();
+      if (dow === 0) continue;
       const assignees = await db.prepare('SELECT user_id FROM holiday_assignees WHERE holiday_id = ?').all(h.id) as any[];
       if (assignees.length === 0 || assignees.some((a: any) => a.user_id === userId)) {
         userHolidayCount++;
@@ -403,7 +405,7 @@ export class AttendanceService {
 
     const id = uuid();
     await db.prepare(
-      "INSERT INTO monthly_overtime (id, user_id, year, month, standard_hours, actual_hours, overtime_hours, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW()) ON DUPLICATE KEY UPDATE actual_hours = VALUES(actual_hours), overtime_hours = VALUES(overtime_hours), updated_at = NOW()"
+      "INSERT INTO monthly_overtime (id, user_id, year, month, standard_hours, actual_hours, overtime_hours, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW()) ON DUPLICATE KEY UPDATE standard_hours = VALUES(standard_hours), actual_hours = VALUES(actual_hours), overtime_hours = VALUES(overtime_hours), updated_at = NOW()"
     ).run(id, userId, year, month, standardHours, actualHours, overtimeHours);
   }
 

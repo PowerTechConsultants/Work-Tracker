@@ -95,6 +95,7 @@ const gracefulShutdown = async (signal: string, exitCode = 0) => {
   closeSocket();
   console.log('[SHUTDOWN] Socket.IO server closed');
   clearInterval(cleanupTimer);
+  clearInterval(overtimeTimer);
   server.close(async () => {
     console.log('[SHUTDOWN] HTTP server closed');
     try { await pool.end(); } catch (e) { console.error('[Shutdown] Pool close error:', e); }

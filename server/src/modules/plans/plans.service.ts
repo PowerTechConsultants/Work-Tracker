@@ -52,10 +52,10 @@ export class PlansService {
     return mapPlan(p);
   }
 
-  static async update(id: string, userId: string, input: any) {
+  static async update(id: string, userId: string, input: any, role?: string) {
     const plan = await db.prepare('SELECT * FROM work_plans WHERE id = ?').get(id) as any;
     if (!plan) throw new AppError(404, 'Plan not found');
-    if (plan.user_id !== userId) throw new AppError(403, 'Cannot update others plan');
+    if (role !== 'director' && role !== 'hr' && plan.user_id !== userId) throw new AppError(403, 'Cannot update others plan');
     if (plan.status !== 'draft') throw new AppError(409, 'Only draft plans can be updated');
     await db.prepare("UPDATE work_plans SET planned_work = ?, priority = ?, estimated_hours = ?, updated_at = datetime('now') WHERE id = ?")
       .run(input.plannedWork ?? plan.planned_work, input.priority ?? plan.priority, input.estimatedHours ?? plan.estimated_hours, id);

@@ -52,7 +52,7 @@ router.post('/', validate(createReportSchema), async (req: Request, res: Respons
 
 router.patch('/:id', requireUuid('id'), validate(updateReportSchema), async (req: Request, res: Response, next) => {
   try {
-    const report = await ReportsService.update(req.params.id!, req.user!.sub, req.body);
+    const report = await ReportsService.update(req.params.id!, req.user!.sub, req.body, req.user!.role);
     res.json(report);
   } catch (err) { next(err); }
 });
