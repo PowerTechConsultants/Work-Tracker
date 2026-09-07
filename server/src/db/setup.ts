@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 import { ensureAdminBootstrap } from './bootstrap';
 
-function setup() {
+async function setup() {
   const adminEmail = process.env.ADMIN_EMAIL;
   const adminPassword = process.env.ADMIN_PASSWORD;
 
@@ -20,7 +20,7 @@ function setup() {
     process.exit(1);
   }
 
-  ensureAdminBootstrap();
+  await ensureAdminBootstrap();
 }
 
 setup();

@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 
-const DEFAULT_MAX_CONCURRENCY = parseInt(process.env.MAX_CONCURRENCY ?? '100', 10);
+const DEFAULT_MAX_CONCURRENCY = Math.max(1, parseInt(process.env.MAX_CONCURRENCY ?? '100', 10) || 100);
 
 export function concurrencyLimiter(maxConcurrent: number = DEFAULT_MAX_CONCURRENCY) {
   let active = 0;
