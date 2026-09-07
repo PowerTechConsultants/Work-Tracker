@@ -165,12 +165,14 @@ export class TasksService {
       if (input.actualHours !== undefined) { sets.push('actual_hours = ?'); params.push(input.actualHours); }
       params.push(id);
       await db.prepare(`UPDATE tasks SET ${sets.join(', ')} WHERE id = ?`).run(...params);
-      if (input.assigneeIds && input.assigneeIds.length > 0) {
+      if (input.assigneeIds !== undefined) {
         await db.prepare('DELETE FROM task_assignments WHERE task_id = ?').run(id);
-        const ph = input.assigneeIds.map(() => '(?, ?)').join(', ');
-        const p: any[] = [];
-        for (const uid of input.assigneeIds) { p.push(id, uid); }
-        await db.prepare(`INSERT INTO task_assignments (task_id, user_id) VALUES ${ph}`).run(...p);
+        if (input.assigneeIds.length > 0) {
+          const ph = input.assigneeIds.map(() => '(?, ?)').join(', ');
+          const p: any[] = [];
+          for (const uid of input.assigneeIds) { p.push(id, uid); }
+          await db.prepare(`INSERT INTO task_assignments (task_id, user_id) VALUES ${ph}`).run(...p);
+        }
       }
       return mapTask(await db.prepare('SELECT id, title, description, priority, status, created_by_id, department_id, progress_percent, due_date, started_at, completed_at, estimated_hours, actual_hours, created_at, updated_at FROM tasks WHERE id = ?').get(id));
     })();

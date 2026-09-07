@@ -184,11 +184,15 @@ export class AttendanceService {
     const workingHours = Math.max(0, Math.round((rawHours - pauseHours) * 100) / 100);
     const status = rec.status === 'remote' ? 'remote' : (workingHours < HALF_DAY_THRESHOLD ? 'half_day' : 'work_end');
 
+    const DAY_MS = 8 * 3600000;
+    const overtimeMs = Math.max(0, totalMs - pauseMinutes * 60000 - DAY_MS);
+    const overtimeHours = Math.round((overtimeMs / 3600000) * 100) / 100;
+
     await db.prepare(`UPDATE attendance SET
-      logout_time = ?, working_hours = ?, overtime_hours = 0,
+      logout_time = ?, working_hours = ?, overtime_hours = ?,
       pause_minutes = ?, pause_end_time = COALESCE(pause_end_time, ?),
       status = ?, updated_at = ? WHERE id = ?`)
-      .run(nowIso, workingHours, pauseMinutes, rec.pause_start_time ? nowIso : null, status, nowIso, rec.id);
+      .run(nowIso, workingHours, overtimeHours, pauseMinutes, rec.pause_start_time ? nowIso : null, status, nowIso, rec.id);
 
     const updated = await db.prepare('SELECT * FROM attendance WHERE id = ?').get(rec.id);
     logEvent(rec.id, userId, 'check_out', input, nowIso);
@@ -385,8 +389,15 @@ export class AttendanceService {
       if (dow === 0) sundays++;
     }
 
-    const holidayCount = (await db.prepare('SELECT COUNT(*) as c FROM holidays WHERE date >= ? AND date <= ?').get(start, end) as any).c;
-    const workingDays = totalDays - sundays - holidayCount;
+    const allHolidays = await db.prepare('SELECT id, date FROM holidays WHERE date >= ? AND date <= ?').all(start, end) as any[];
+    let userHolidayCount = 0;
+    for (const h of allHolidays) {
+      const assignees = await db.prepare('SELECT user_id FROM holiday_assignees WHERE holiday_id = ?').all(h.id) as any[];
+      if (assignees.length === 0 || assignees.some((a: any) => a.user_id === userId)) {
+        userHolidayCount++;
+      }
+    }
+    const workingDays = totalDays - sundays - userHolidayCount;
     const standardHours = workingDays * 8;
     const overtimeHours = Math.max(0, Math.round((actualHours - standardHours) * 100) / 100);
 

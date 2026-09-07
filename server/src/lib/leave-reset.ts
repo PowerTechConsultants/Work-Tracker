@@ -73,8 +73,8 @@ async function hasLeaveBefore(userId: string, year: number): Promise<boolean> {
 }
 
 async function computeCarryforward(userId: string, prevYear: number): Promise<number> {
-  if (!(await hasLeaveBefore(userId, prevYear + 1))) return 0;
   const entitlement = await proposalEntitlement(userId, prevYear);
+  if (entitlement === 0) return 0;
   const used = await proposalUsedInYear(userId, prevYear);
   return Math.max(0, entitlement - used);
 }

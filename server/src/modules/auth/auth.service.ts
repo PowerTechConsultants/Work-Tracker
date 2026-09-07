@@ -179,6 +179,7 @@ export class AuthService {
     if (!valid) throw new AppError(400, 'Invalid verification code');
 
     await db.prepare('UPDATE users SET two_factor_enabled = 1, two_factor_secret = ? WHERE id = ?').run(input.secret, userId);
+    await revokeUserTokens(userId);
     return { enabled: true };
   }
 
@@ -262,11 +263,9 @@ export class AuthService {
   }
 
   static async logout(refreshToken: string) {
-    try {
-      const payload = verifyRefreshToken(refreshToken);
-      await revokeUserTokens(payload.sub);
-      await db.prepare("UPDATE refresh_tokens SET revoked_at = datetime('now') WHERE user_id = ?").run(payload.sub);
-    } catch (e) { console.error('[LOGOUT] Failed to revoke token:', e); }
+    const payload = verifyRefreshToken(refreshToken);
+    await revokeUserTokens(payload.sub);
+    await db.prepare("UPDATE refresh_tokens SET revoked_at = datetime('now') WHERE user_id = ?").run(payload.sub);
   }
 
   static async changePassword(userId: string, input: { currentPassword: string; newPassword: string }) {

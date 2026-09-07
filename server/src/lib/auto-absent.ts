@@ -51,11 +51,13 @@ async function skipUsersForHoliday(date: string): Promise<string[]> {
 }
 
 async function isCompanyWideHoliday(date: string): Promise<boolean> {
-  const holidayIds = (await db.prepare('SELECT id FROM holidays WHERE date = ?').all(date) as any[]).map((r: any) => r.id);
-  if (holidayIds.length === 0) return false;
-  const placeholders = holidayIds.map(() => '?').join(',');
-  const assigned = await db.prepare(`SELECT 1 FROM holiday_assignees WHERE holiday_id IN (${placeholders}) LIMIT 1`).get(...holidayIds);
-  return !assigned;
+  const holidays = await db.prepare('SELECT id FROM holidays WHERE date = ?').all(date) as any[];
+  if (holidays.length === 0) return false;
+  for (const h of holidays) {
+    const assigneeCount = (await db.prepare('SELECT COUNT(*) as c FROM holiday_assignees WHERE holiday_id = ?').get(h.id) as any).c;
+    if (assigneeCount > 0) return false;
+  }
+  return true;
 }
 
 async function markAbsentForDay(date: string, skipUserIds: string[]) {

@@ -48,6 +48,13 @@ router.post('/', requireRole('director', 'hr'), validate(createTaskSchema), asyn
   } catch (err) { next(err); }
 });
 
+router.patch('/approvals/:approvalId', requireRole('director', 'hr'), requireUuid('approvalId'), validate(reviewApprovalSchema), async (req: Request, res: Response, next) => {
+  try {
+    const approval = await TasksService.reviewApproval(req.params.approvalId!, req.user!.sub, req.body.status, req.body.comment);
+    res.json(approval);
+  } catch (err) { next(err); }
+});
+
 router.patch('/:id', requireUuid('id'), validate(updateTaskSchema), async (req: Request, res: Response, next) => {
   try {
     const task = await TasksService.update(req.params.id!, req.body, req.user!.sub, req.user!.role);
@@ -73,13 +80,6 @@ router.post('/:id/comments', requireUuid('id'), validate(addCommentSchema), asyn
   try {
     const comment = await TasksService.addComment(req.params.id!, req.user!.sub, req.body.message, req.user!.role);
     res.status(201).json(comment);
-  } catch (err) { next(err); }
-});
-
-router.patch('/approvals/:approvalId', requireRole('director', 'hr'), requireUuid('approvalId'), validate(reviewApprovalSchema), async (req: Request, res: Response, next) => {
-  try {
-    const approval = await TasksService.reviewApproval(req.params.approvalId!, req.user!.sub, req.body.status, req.body.comment);
-    res.json(approval);
   } catch (err) { next(err); }
 });
 
