@@ -63,13 +63,6 @@ function iterDates(start: string, end: string): string[] {
 
 async function getExcludedDates(userId: string, start: string, end: string, holidayCache?: Map<string, any[]>): Promise<Set<string>> {
   const excluded = new Set<string>();
-  const cur = new Date(`${start}T00:00:00Z`);
-  const endD = new Date(`${end}T00:00:00Z`);
-  while (cur <= endD) {
-    const iso = cur.toISOString().split('T')[0]!;
-    if (isSundayIST(iso)) excluded.add(iso);
-    cur.setUTCDate(cur.getUTCDate() + 1);
-  }
 
   const holidays = holidayCache?.get(`${start}:${end}`) ?? await db.prepare('SELECT id, date FROM holidays WHERE date BETWEEN ? AND ?').all(start, end) as any[];
   if (holidayCache) holidayCache.set(`${start}:${end}`, holidays);

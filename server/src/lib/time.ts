@@ -26,10 +26,12 @@ export function getISTDateFromISO(iso: string): string {
   }).format(d);
 }
 
-// Parses SQLite datetime strings ('YYYY-MM-DD HH:mm:ss', UTC) and other
+// Parses SQLite/MySQL datetime strings ('YYYY-MM-DD HH:mm:ss', UTC) and other
 // date/time strings as UTC instead of the server's local timezone.
-export function parseUTC(dateString: string): Date {
-  const s = dateString.trim();
+// Also handles Date objects from MySQL driver.
+export function parseUTC(dateString: string | Date): Date {
+  if (dateString instanceof Date) return dateString;
+  const s = String(dateString).trim();
   if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(s)) {
     return new Date(s.replace(' ', 'T') + 'Z');
   }

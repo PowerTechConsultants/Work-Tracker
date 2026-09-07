@@ -397,12 +397,8 @@ export class AttendanceService {
   }
 
   static async getMonthlyOvertime(userId: string, year: number, month: number) {
-    const row = await db.prepare('SELECT * FROM monthly_overtime WHERE user_id = ? AND year = ? AND month = ?').get(userId, year, month) as any;
-    if (!row) {
-      await this.calculateMonthlyOvertime(userId, year, month);
-      return await db.prepare('SELECT * FROM monthly_overtime WHERE user_id = ? AND year = ? AND month = ?').get(userId, year, month);
-    }
-    return row;
+    await this.calculateMonthlyOvertime(userId, year, month);
+    return await db.prepare('SELECT * FROM monthly_overtime WHERE user_id = ? AND year = ? AND month = ?').get(userId, year, month);
   }
 
   static async getMonthlyOvertimeAll(year: number, month: number) {

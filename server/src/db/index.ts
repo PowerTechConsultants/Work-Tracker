@@ -23,7 +23,7 @@ if (url) {
   } catch (e) { console.error('[DB] URL parse error:', e); }
 }
 
-const pool = mysql.createPool({ host, port, user, password, database, waitForConnections: true, connectionLimit: 10, queueLimit: 50, enableKeepAlive: true, timezone: '+00:00', connectTimeout: 10000 });
+const pool = mysql.createPool({ host, port, user, password, database, waitForConnections: true, connectionLimit: 10, queueLimit: 50, enableKeepAlive: true, timezone: '+00:00', connectTimeout: 10000, dateStrings: true });
 console.log(`[DB] MySQL pool: ${host}:${port}/${database}`);
 
 try {
