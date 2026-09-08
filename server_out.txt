@@ -1,7 +1,0 @@
-[DB] MySQL pool: localhost:3306/hr
-[DB] MySQL connected
-[Auto-Absent] Scheduler started (interval: 300s)
-[SERVER] Running on http://0.0.0.0:4000
-[SERVER] Access via your local IP address
-[ENV] development
-[Leave-Reset] Already processed for 2026, skipping
