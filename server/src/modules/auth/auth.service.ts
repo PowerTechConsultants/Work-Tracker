@@ -55,7 +55,7 @@ export class AuthService {
 
     const user = await db.prepare('SELECT id, email, password_hash, role, status, employee_id, first_name, last_name, designation, department_id, phone_number, joining_date, profile_picture_url, failed_login_attempts, locked_until, two_factor_enabled, two_factor_secret FROM users WHERE email = ?').get(email) as any;
     if (!user) throw new AppError(401, 'Invalid credentials');
-    if (user.status !== 'active') throw new AppError(403, 'Account is not active');
+    if (user.status !== 'active') throw new AppError(401, 'Invalid credentials');
     if (user.locked_until && parseUTC(user.locked_until) > new Date()) {
       throw new AppError(423, 'Account is temporarily locked');
     }
@@ -94,6 +94,8 @@ export class AuthService {
 
       const emailKey = `login:email:${input.email.toLowerCase().trim()}`;
       await emailLimiter.reset(emailKey);
+      const ipKey = `login:ip:${ip || 'unknown'}`;
+      await ipLimiter.reset(ipKey);
 
       return AuthService.issueSession(user, userAgent, ip);
     }

@@ -108,17 +108,7 @@ export function createApp() {
     store: new RateLimitStore('write'),
   });
 
-  app.use(globalLimiter);
-  // Parsing
-  app.use(express.json({ limit: '1mb' }));
-  app.use(express.urlencoded({ extended: false }));
-  app.use(cookieParser());
-
-  // Logging
-  morgan.token('req-id', (req: any) => req.id?.slice(0, 8) || '-');
-  app.use(morgan(config.nodeEnv === 'production' ? ':req-id :method :url :status :response-time ms' : 'dev'));
-  
-  // Health check
+  // Health check (before rate limiter to avoid LB false positives)
   app.get('/health', async (_req, res) => {
     try {
       const migr = await db.prepare('SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1').get() as any;
@@ -155,6 +145,16 @@ export function createApp() {
       });
     }
   });
+
+  app.use(globalLimiter);
+  // Parsing
+  app.use(express.json({ limit: '1mb' }));
+  app.use(express.urlencoded({ extended: false }));
+  app.use(cookieParser());
+
+  // Logging
+  morgan.token('req-id', (req: any) => req.id?.slice(0, 8) || '-');
+  app.use(morgan(config.nodeEnv === 'production' ? ':req-id :method :url :status :response-time ms' : 'dev'));
 
   // Write limiter for state-changing methods
   app.use((req, res, next) => {

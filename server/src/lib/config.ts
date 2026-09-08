@@ -49,4 +49,7 @@ if (config.nodeEnv === 'production') {
   if (hasWeak || tooShort) {
     throw new Error('[CONFIG] FATAL: JWT secrets must be unique, at least 32 characters, and not default/example values. Set JWT_ACCESS_SECRET and JWT_REFRESH_SECRET env vars.');
   }
+  if (config.adminPassword === 'Admin@123456') {
+    throw new Error('[CONFIG] FATAL: Admin password must not be the default. Set ADMIN_PASSWORD env var.');
+  }
 }

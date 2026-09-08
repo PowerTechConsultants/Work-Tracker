@@ -41,7 +41,7 @@ const loginLimiter = rateLimit({
   store: new RateLimitStore('login'),
 });
 
-router.post('/login', loginLimiter, validate(loginSchema), async (req: Request, res: Response, next) => {
+router.post('/login', validate(loginSchema), loginLimiter, async (req: Request, res: Response, next) => {
   try {
     const result = await AuthService.login(req.body, req.headers['user-agent'], req.ip);
     if ('twoFactorRequired' in result) {

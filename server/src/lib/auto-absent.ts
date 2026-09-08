@@ -42,11 +42,25 @@ async function invalidateAnalyticsCache() {
 }
 
 async function skipUsersForHoliday(date: string): Promise<string[]> {
-  const holidayIds = (await db.prepare('SELECT id FROM holidays WHERE date = ?').all(date) as any[]).map((r: any) => r.id);
-  if (holidayIds.length === 0) return [];
+  const holidays = await db.prepare('SELECT id FROM holidays WHERE date = ?').all(date) as any[];
+  if (holidays.length === 0) return [];
 
+  const holidayIds = holidays.map((h: any) => h.id);
   const placeholders = holidayIds.map(() => '?').join(',');
   const assignees = await db.prepare(`SELECT user_id FROM holiday_assignees WHERE holiday_id IN (${placeholders})`).all(...holidayIds) as any[];
+  const assignedUserIds = new Set(assignees.map((r: any) => r.user_id));
+
+  let hasCompanyWide = false;
+  for (const h of holidays) {
+    const cnt = (await db.prepare('SELECT COUNT(*) as c FROM holiday_assignees WHERE holiday_id = ?').get(h.id) as any).c;
+    if (cnt === 0) { hasCompanyWide = true; break; }
+  }
+
+  if (hasCompanyWide && assignedUserIds.size > 0) {
+    const allActive = await db.prepare("SELECT id FROM users WHERE status = 'active'").all() as any[];
+    return allActive.map((u: any) => u.id).filter((id: string) => !assignedUserIds.has(id));
+  }
+
   return assignees.map((r: any) => r.user_id);
 }
 
@@ -99,11 +113,9 @@ async function markAbsentForDay(date: string, skipUserIds: string[]) {
 }
 
 async function processDay(date: string) {
-    // Check for holidays
-    if (await isCompanyWideHoliday(date)) return; // Company-wide holiday — skip everyone
-    const holidayUserIds = await skipUsersForHoliday(date);
-    // Sunday is optional — don't mark absent on Sundays
     if (isSundayIST(date)) return;
+    if (await isCompanyWideHoliday(date)) return;
+    const holidayUserIds = await skipUsersForHoliday(date);
     await markAbsentForDay(date, holidayUserIds);
 }
 

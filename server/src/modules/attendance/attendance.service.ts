@@ -141,9 +141,15 @@ export class AttendanceService {
   }
 
   static async endPause(userId: string, input?: { latitude?: number; longitude?: number; accuracy?: number; locationCapturedAt?: string }) {
-    const today = getISTDate();
-    const rec = await db.prepare('SELECT * FROM attendance WHERE user_id = ? AND date = ?').get(userId, today) as any;
-    if (!rec) throw new AppError(404, 'No check-in found for today');
+    let today = getISTDate();
+    let rec = await db.prepare('SELECT * FROM attendance WHERE user_id = ? AND date = ?').get(userId, today) as any;
+    if (!rec) {
+      const yesterday = new Date(); yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split('T')[0]!;
+      rec = await db.prepare('SELECT * FROM attendance WHERE user_id = ? AND date = ?').get(userId, yesterdayStr) as any;
+      if (rec) today = yesterdayStr;
+    }
+    if (!rec) throw new AppError(404, 'No check-in found');
     if (!rec.pause_start_time || rec.pause_end_time) return rec;
 
     const now = new Date();
@@ -162,10 +168,16 @@ export class AttendanceService {
   }
 
   static async checkOut(userId: string, input?: { latitude?: number; longitude?: number; accuracy?: number; locationCapturedAt?: string }) {
-    const today = getISTDate();
-    const rec = await db.prepare('SELECT * FROM attendance WHERE user_id = ? AND date = ?').get(userId, today) as any;
-    if (!rec) throw new AppError(404, 'No check-in found for today');
-    if (!rec.login_time) throw new AppError(400, 'No check-in found for today');
+    let today = getISTDate();
+    let rec = await db.prepare('SELECT * FROM attendance WHERE user_id = ? AND date = ?').get(userId, today) as any;
+    if (!rec) {
+      const yesterday = new Date(); yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split('T')[0]!;
+      rec = await db.prepare('SELECT * FROM attendance WHERE user_id = ? AND date = ?').get(userId, yesterdayStr) as any;
+      if (rec) today = yesterdayStr;
+    }
+    if (!rec) throw new AppError(404, 'No check-in found');
+    if (!rec.login_time) throw new AppError(400, 'No check-in found');
     if (rec.logout_time) throw new AppError(409, 'Already checked out today');
 
     const now = new Date();
@@ -176,6 +188,7 @@ export class AttendanceService {
     if (rec.pause_start_time && !rec.pause_end_time) {
       const pauseStart = parseUTC(rec.pause_start_time);
       pauseMinutes += Math.round((now.getTime() - pauseStart.getTime()) / 60000);
+      logEvent(rec.id, userId, 'pause_end', {}, nowIso);
     }
 
     const totalMs = now.getTime() - loginTime.getTime();
