@@ -53,7 +53,7 @@ export class AnalyticsService {
     for (const r of attendanceRows) {
       const stat = deptMap.get(r.department_id);
       if (stat) {
-        if (r.status === 'present' || r.status === 'work_end' || r.status === 'on_break' || r.status === 'half_day') stat.present += r.count;
+        if (r.status === 'present' || r.status === 'work_end' || r.status === 'on_break' || r.status === 'half_day' || r.status === 'remote') stat.present += r.count;
         else if (r.status === 'absent') stat.absent += r.count;
         else if (r.status === 'leave') stat.leave += r.count;
         else if (r.status === 'holiday') stat.holiday += r.count;
@@ -296,7 +296,7 @@ export class AnalyticsService {
     const attendanceRows = await db.prepare(`
       SELECT u.department_id,
         COUNT(*) as totalRecords,
-        SUM(CASE WHEN a.status IN ('present', 'work_end', 'on_break', 'half_day') THEN 1 ELSE 0 END) as presentRecords
+        SUM(CASE WHEN a.status IN ('present', 'work_end', 'on_break', 'half_day', 'remote') THEN 1 ELSE 0 END) as presentRecords
       FROM attendance a
       JOIN users u ON a.user_id = u.id
       WHERE a.date >= ? AND a.date <= ? AND u.department_id IS NOT NULL
@@ -423,7 +423,7 @@ export class AnalyticsService {
     const attStats = await db.prepare(`
       SELECT user_id,
         COUNT(*) as totalDays,
-        SUM(CASE WHEN status IN ('present', 'work_end', 'on_break', 'half_day') THEN 1 ELSE 0 END) as presentDays,
+        SUM(CASE WHEN status IN ('present', 'work_end', 'on_break', 'half_day', 'remote') THEN 1 ELSE 0 END) as presentDays,
         AVG(working_hours) as avgHoursPerDay
       FROM attendance
       WHERE user_id IN (${ph}) AND date >= ? AND date <= ?
@@ -529,7 +529,7 @@ export class AnalyticsService {
     const attended = new Set<string>();
     for (const a of todayAtt) {
       attended.add(a.user_id);
-      if (['present', 'work_end', 'on_break', 'half_day'].includes(a.status)) present++;
+      if (['present', 'work_end', 'on_break', 'half_day', 'remote'].includes(a.status)) present++;
       else if (a.status === 'absent') absent++;
       else if (a.status === 'leave') leave++;
     }

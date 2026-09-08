@@ -1,6 +1,7 @@
 'use client';
 
 import DashboardLayout from '@/components/DashboardLayout';
+import { useAuth } from '@/context/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, getApiError } from '@/lib/api';
 import { statusColor, displayRole } from '@/lib/utils';
@@ -17,6 +18,7 @@ import Modal from '@/components/Modal';
 const ExportDialog = dynamic(() => import('@/components/ExportDialog'), { ssr: false });
 
 export default function UsersPage() {
+  const { user, loading } = useAuth();
   const qc = useQueryClient();
   const { confirm } = useConfirm();
   const [searchInput, setSearchInput] = useState('');
@@ -141,6 +143,18 @@ export default function UsersPage() {
     onError: (_e, _id, ctx) => { if (ctx?.prev) ctx.prev.forEach((kv: any[]) => qc.setQueryData(kv[0], kv[1])); toast.error('Failed to delete user'); },
     onSettled: () => qc.invalidateQueries({ queryKey: ['users'] }),
   });
+
+  if (loading) return <DashboardLayout><div className="flex items-center justify-center py-16"><div className="h-8 w-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" /></div></DashboardLayout>;
+  if (!user || (user.role !== 'director' && user.role !== 'hr')) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <p className="text-sm text-slate-400 font-medium">Access Denied</p>
+          <p className="text-xs text-slate-600 mt-1">You need director or HR permissions to access this page.</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>

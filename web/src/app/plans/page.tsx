@@ -47,14 +47,15 @@ export default function PlansPage() {
     mutationFn: async (id: string) => (await api.post(`/plans/${id}/submit`)).data,
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: ['plans'] });
-      const prev = qc.getQueryData(['plans']);
-      qc.setQueryData(['plans'], (old: any) => {
-        if (!old?.plans) return old;
-        return { ...old, plans: old.plans.map((p: any) => p.id === id ? { ...p, status: 'submitted' } : p) };
-      });
-      return { prev };
+      const queries = qc.getQueriesData({ queryKey: ['plans'] });
+      for (const [key, old] of queries) {
+        if (old && typeof old === 'object' && 'plans' in old) {
+          qc.setQueryData(key, { ...(old as any), plans: (old as any).plans.map((p: any) => p.id === id ? { ...p, status: 'submitted' } : p) });
+        }
+      }
+      return { queries };
     },
-    onError: (_e, _id, ctx) => { if (ctx?.prev) qc.setQueryData(['plans'], ctx.prev); setError('Failed to submit plan'); },
+    onError: (_e, _id, ctx) => { if (ctx?.queries) for (const [key, data] of ctx.queries) qc.setQueryData(key, data); setError('Failed to submit plan'); },
     onSettled: () => qc.invalidateQueries({ queryKey: ['plans'] }),
   });
 
@@ -62,14 +63,15 @@ export default function PlansPage() {
     mutationFn: async ({ id, status }: { id: string; status: 'approved' | 'rejected' }) => (await api.post(`/plans/${id}/review`, { status })).data,
     onMutate: async ({ id, status }) => {
       await qc.cancelQueries({ queryKey: ['plans'] });
-      const prev = qc.getQueryData(['plans']);
-      qc.setQueryData(['plans'], (old: any) => {
-        if (!old?.plans) return old;
-        return { ...old, plans: old.plans.map((p: any) => p.id === id ? { ...p, status } : p) };
-      });
-      return { prev };
+      const queries = qc.getQueriesData({ queryKey: ['plans'] });
+      for (const [key, old] of queries) {
+        if (old && typeof old === 'object' && 'plans' in old) {
+          qc.setQueryData(key, { ...(old as any), plans: (old as any).plans.map((p: any) => p.id === id ? { ...p, status } : p) });
+        }
+      }
+      return { queries };
     },
-    onError: (_e, _vars, ctx) => { if (ctx?.prev) qc.setQueryData(['plans'], ctx.prev); setError('Review failed'); },
+    onError: (_e, _vars, ctx) => { if (ctx?.queries) for (const [key, data] of ctx.queries) qc.setQueryData(key, data); setError('Review failed'); },
     onSettled: () => qc.invalidateQueries({ queryKey: ['plans'] }),
   });
 

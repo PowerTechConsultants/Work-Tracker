@@ -56,9 +56,9 @@ async function skipUsersForHoliday(date: string): Promise<string[]> {
     if (cnt === 0) { hasCompanyWide = true; break; }
   }
 
-  if (hasCompanyWide && assignedUserIds.size > 0) {
+  if (hasCompanyWide) {
     const allActive = await db.prepare("SELECT id FROM users WHERE status = 'active'").all() as any[];
-    return allActive.map((u: any) => u.id).filter((id: string) => !assignedUserIds.has(id));
+    return allActive.map((u: any) => u.id);
   }
 
   return assignees.map((r: any) => r.user_id);

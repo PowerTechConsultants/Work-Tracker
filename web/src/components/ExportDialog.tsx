@@ -155,11 +155,16 @@ export default function ExportDialog({ isOpen, onClose, data, columns, filename,
       const { exportMultiSheetExcel } = await import('@/lib/utils');
       await exportMultiSheetExcel(sections, filename);
     } else if (format === 'csv') {
-      const allRows = [...mainRows];
       const allHeaders = [...mainHeaders];
+      extraData.forEach((e) => { e.headers.forEach((h: string) => { if (!allHeaders.includes(h)) allHeaders.push(h); }); });
+      const allRows = [...mainRows];
       extraData.forEach((e) => {
         if (e.rows.length > 0) {
-          allRows.push(...e.rows);
+          allRows.push(...e.rows.map((r: any) => {
+            const merged: any = {};
+            allHeaders.forEach((h: string) => { merged[h] = r[h] ?? ''; });
+            return merged;
+          }));
         }
       });
       exportToCSV(allRows, filename, allHeaders);

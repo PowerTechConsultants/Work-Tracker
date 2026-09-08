@@ -129,6 +129,18 @@ export default function ScheduledReportsPage() {
   const templates = templateData?.templates ?? [];
   const users: any[] = usersData?.users ?? [];
 
+  if (loading) return <DashboardLayout><div className="flex items-center justify-center py-16"><div className="h-8 w-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" /></div></DashboardLayout>;
+  if (!user || (user.role !== 'director' && user.role !== 'hr')) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <p className="text-sm text-slate-400 font-medium">Access Denied</p>
+          <p className="text-xs text-slate-600 mt-1">You need director or HR permissions to access this page.</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout>
       <div className="space-y-6 animate-fade-in">

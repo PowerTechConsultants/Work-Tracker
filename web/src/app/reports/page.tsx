@@ -54,14 +54,15 @@ export default function ReportsPage() {
     mutationFn: async (id: string) => (await api.post(`/reports/${id}/submit`)).data,
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: ['reports'] });
-      const prev = qc.getQueryData(['reports']);
-      qc.setQueryData(['reports'], (old: any) => {
-        if (!old?.reports) return old;
-        return { ...old, reports: old.reports.map((r: any) => r.id === id ? { ...r, status: 'submitted' } : r) };
-      });
-      return { prev };
+      const queries = qc.getQueriesData({ queryKey: ['reports'] });
+      for (const [key, old] of queries) {
+        if (old && typeof old === 'object' && 'reports' in old) {
+          qc.setQueryData(key, { ...(old as any), reports: (old as any).reports.map((r: any) => r.id === id ? { ...r, status: 'submitted' } : r) });
+        }
+      }
+      return { queries };
     },
-    onError: (_e, _id, ctx) => { if (ctx?.prev) qc.setQueryData(['reports'], ctx.prev); setError('Submit failed'); },
+    onError: (_e, _id, ctx) => { if (ctx?.queries) for (const [key, data] of ctx.queries) qc.setQueryData(key, data); setError('Submit failed'); },
     onSettled: () => qc.invalidateQueries({ queryKey: ['reports'] }),
   });
 
@@ -69,14 +70,15 @@ export default function ReportsPage() {
     mutationFn: async ({ id, status }: { id: string; status: 'approved' | 'rejected' }) => (await api.post(`/reports/${id}/review`, { status })).data,
     onMutate: async ({ id, status }) => {
       await qc.cancelQueries({ queryKey: ['reports'] });
-      const prev = qc.getQueryData(['reports']);
-      qc.setQueryData(['reports'], (old: any) => {
-        if (!old?.reports) return old;
-        return { ...old, reports: old.reports.map((r: any) => r.id === id ? { ...r, status } : r) };
-      });
-      return { prev };
+      const queries = qc.getQueriesData({ queryKey: ['reports'] });
+      for (const [key, old] of queries) {
+        if (old && typeof old === 'object' && 'reports' in old) {
+          qc.setQueryData(key, { ...(old as any), reports: (old as any).reports.map((r: any) => r.id === id ? { ...r, status } : r) });
+        }
+      }
+      return { queries };
     },
-    onError: (_e, _vars, ctx) => { if (ctx?.prev) qc.setQueryData(['reports'], ctx.prev); setError('Review failed'); },
+    onError: (_e, _vars, ctx) => { if (ctx?.queries) for (const [key, data] of ctx.queries) qc.setQueryData(key, data); setError('Review failed'); },
     onSettled: () => qc.invalidateQueries({ queryKey: ['reports'] }),
   });
 

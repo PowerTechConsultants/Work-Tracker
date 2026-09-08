@@ -66,10 +66,9 @@ function translateExec(sql: string): string {
     .replace(/datetime\('now'\)/g, 'NOW()')
     .replace(/datetime\('now', '\+(\d+) seconds'\)/g, 'NOW() + INTERVAL $1 SECOND')
     .replace(/\bINTEGER PRIMARY KEY\b/g, 'INT PRIMARY KEY')
-    .replace(/\bTEXT PRIMARY KEY\b/g, 'VARCHAR(255) PRIMARY KEY')
+    .replace(/\bTEXT PRIMARY KEY\b/g, 'VARCHAR(36) PRIMARY KEY')
     .replace(/\bTEXT NOT NULL\b/g, 'VARCHAR(255) NOT NULL')
     .replace(/\bTEXT UNIQUE\b/g, 'VARCHAR(255) UNIQUE')
-    .replace(/\bTEXT\b/g, 'VARCHAR(255)')
     .replace(/\bREAL\b/g, 'DECIMAL(10,2)')
     .replace(/\bINTEGER\b/g, 'INT');
   // MySQL doesn't support CREATE INDEX IF NOT EXISTS — strip it
@@ -214,7 +213,7 @@ const migrations: Array<{ version: number; name: string; up: () => Promise<void>
       await addColumnIfMissing('attendance', 'pause_start_time', 'pause_start_time TEXT');
       await addColumnIfMissing('attendance', 'pause_end_time', 'pause_end_time TEXT');
       await addColumnIfMissing('attendance', 'pause_minutes', 'pause_minutes REAL DEFAULT 0');
-      await db.exec(`CREATE TABLE IF NOT EXISTS holidays (id TEXT PRIMARY KEY, date TEXT NOT NULL, name TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'public', created_by TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')), FOREIGN KEY (created_by) REFERENCES users(id))`);
+      await db.exec(`CREATE TABLE IF NOT EXISTS holidays (id TEXT PRIMARY KEY, date TEXT NOT NULL, name TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'public', created_by TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')), FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL)`);
       await db.exec(`CREATE TABLE IF NOT EXISTS holiday_assignees (holiday_id TEXT NOT NULL, user_id TEXT NOT NULL, PRIMARY KEY (holiday_id, user_id), FOREIGN KEY (holiday_id) REFERENCES holidays(id) ON DELETE CASCADE, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)`);
       await db.exec(`CREATE TABLE IF NOT EXISTS password_reset_tokens (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, token_hash TEXT NOT NULL, expires_at TEXT NOT NULL, used_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)`);
       await db.exec('CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance(date)');

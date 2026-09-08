@@ -7,6 +7,7 @@ import { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { formatDateTime } from '@/lib/utils';
+import { useAuth } from '@/context/AuthContext';
 import {
   Bell, CheckCheck, CheckCircle, Clock, FileText,
   AlertCircle, Info, Settings, Trash2, ChevronLeft, ChevronRight,
@@ -55,6 +56,7 @@ export default function NotificationsPage() {
   const qc = useQueryClient();
   const confirmCtx = useConfirm();
   const router = useRouter();
+  const { user, loading } = useAuth();
 
   const params: Record<string, any> = { limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE };
   if (filter === 'unread') params.unread = true;
@@ -63,6 +65,7 @@ export default function NotificationsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['notifications', 'page', page, filter],
     queryFn: async () => (await api.get('/notifications', { params })).data,
+    enabled: !loading && !!user,
   });
 
   const notifications: Notification[] = data?.notifications ?? [];

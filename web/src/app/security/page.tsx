@@ -142,7 +142,7 @@ function PolicyForm({ policy, onSave }: { policy: PasswordPolicy; onSave: (data:
 }
 
 export default function SecurityPage() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const [auditPage, setAuditPage] = useState(1);
   const [auditFilter, setAuditFilter] = useState('');
   const qc = useQueryClient();
@@ -166,6 +166,7 @@ export default function SecurityPage() {
     queryFn: async () => (await apiEndpoints.security.sessions()).data,
   });
 
+  if (loading) return <DashboardLayout><div className="flex items-center justify-center py-16"><div className="h-8 w-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" /></div></DashboardLayout>;
   if (user?.role !== 'director') {
     return (
       <DashboardLayout>

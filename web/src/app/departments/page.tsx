@@ -1,6 +1,7 @@
 'use client';
 
 import DashboardLayout from '@/components/DashboardLayout';
+import { useAuth } from '@/context/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, getApiError } from '@/lib/api';
 import { useConfirm } from '@/components/ConfirmDialog';
@@ -16,6 +17,7 @@ const ExportDialog = dynamic(() => import('@/components/ExportDialog'), { ssr: f
 
 export default function DepartmentsPage() {
   const { confirm } = useConfirm();
+  const { user, loading } = useAuth();
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ['departments'], queryFn: async () => (await api.get('/departments')).data });
   const departments = data?.departments ?? data ?? [];
@@ -73,6 +75,18 @@ export default function DepartmentsPage() {
     onError: (_e, _id, ctx) => { if (ctx?.prev) qc.setQueryData(['departments'], ctx.prev); setError('Failed to delete department'); toast.error('Failed to delete department'); },
     onSettled: () => qc.invalidateQueries({ queryKey: ['departments'] }),
   });
+
+  if (loading) return <DashboardLayout><div className="flex items-center justify-center py-16"><div className="h-8 w-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" /></div></DashboardLayout>;
+  if (!user || (user.role !== 'director' && user.role !== 'hr')) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <p className="text-sm text-slate-400 font-medium">Access Denied</p>
+          <p className="text-xs text-slate-600 mt-1">You need director or HR permissions to access this page.</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
