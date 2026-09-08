@@ -21,3 +21,5 @@ yarn-error.log*
 *.tsbuildinfo
 .next
 out/
+server_out.txt
+server_err.txt
