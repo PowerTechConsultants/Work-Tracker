@@ -160,23 +160,19 @@ export default function AttendancePage() {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [rowEvents, setRowEvents] = useState<Record<string, any[]>>({});
 
-  const toggleRowExpand = useCallback(async (recordId: string) => {
+  const toggleRowExpand = useCallback((recordId: string) => {
+    const isExpanding = !expandedRows.has(recordId);
     setExpandedRows(prev => {
       const next = new Set(prev);
-      if (next.has(recordId)) {
-        next.delete(recordId);
-        return next;
-      }
-      next.add(recordId);
-      // Fetch events if not cached
-      if (!rowEvents[recordId]) {
-        api.get(`/attendance/events/${recordId}`).then(res => {
-          setRowEvents(prev => ({ ...prev, [recordId]: res.data.events }));
-        }).catch(() => {});
-      }
+      if (next.has(recordId)) { next.delete(recordId); } else { next.add(recordId); }
       return next;
     });
-  }, [rowEvents]);
+    if (isExpanding && !rowEvents[recordId]) {
+      api.get(`/attendance/events/${recordId}`).then(res => {
+        setRowEvents(prev => ({ ...prev, [recordId]: res.data.events }));
+      }).catch(() => {});
+    }
+  }, [expandedRows, rowEvents]);
 
   const { data: today, isLoading: todayLoading } = useQuery({
     queryKey: ['todayAtt'],

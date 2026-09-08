@@ -154,15 +154,15 @@ export default function TasksPage() {
     { header: 'Progress', key: 'progress', render: (t: any) => (
       <div className="flex items-center gap-2 min-w-[140px]">
         <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden"><div className="h-full bg-violet-500 rounded-full" style={{ width: `${t.progressPercent}%` }} /></div>
-        <input type="number" min={0} max={100} value={t.progressPercent}
-          onChange={(e) => { const v = Math.min(100, Math.max(0, Number(e.target.value))); updateProgress.mutate({ id: t.id, progressPercent: v }); }}
+        <input type="number" min={0} max={100} defaultValue={t.progressPercent}
+          onBlur={(e) => { const v = Math.min(100, Math.max(0, Number(e.target.value))); if (v !== t.progressPercent) updateProgress.mutate({ id: t.id, progressPercent: v }); }}
           className="w-14 rounded-lg border border-slate-700 bg-slate-800 px-1.5 py-1 text-xs text-white text-center" />
         <span className="text-xs text-slate-400">%</span>
       </div>
     ) },
     { header: 'Time (hrs)', key: 'time', render: (t: any) => (
-      <input type="number" min={0} step={0.5} value={t.actualHours ?? ''}
-        onChange={(e) => updateActualHours.mutate({ id: t.id, actualHours: Number(e.target.value) })}
+      <input type="number" min={0} step={0.5} defaultValue={t.actualHours ?? ''}
+        onBlur={(e) => { const v = Number(e.target.value); if (v !== (t.actualHours ?? 0)) updateActualHours.mutate({ id: t.id, actualHours: v }); }}
         placeholder="hrs"
         className="w-16 rounded-lg border border-slate-700 bg-slate-800 px-1.5 py-1 text-xs text-white" />
     ) },

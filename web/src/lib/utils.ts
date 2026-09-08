@@ -116,7 +116,8 @@ export function exportToCSV(data: any[], filename: string, headers: string[]) {
     ...data.map(row => headers.map(header => {
       const value = row[header];
       const stringValue = value === null || value === undefined ? '' : String(value);
-      return stringValue.includes(',') ? `"${sanitize(stringValue)}"` : sanitize(stringValue);
+      const escaped = stringValue.replace(/"/g, '""');
+      return escaped.includes(',') || escaped.includes('"') ? `"${sanitize(escaped)}"` : sanitize(escaped);
     }).join(','))
   ].join('\n');
   

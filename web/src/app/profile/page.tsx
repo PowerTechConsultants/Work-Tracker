@@ -11,7 +11,7 @@ import { User, Lock, Loader2, CheckCircle, ShieldCheck, ShieldOff } from 'lucide
 import { toast } from 'sonner';
 
 export default function ProfilePage() {
-  const { user, refreshProfile } = useAuth();
+  const { user, refreshProfile, logout } = useAuth();
   const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState<'profile' | 'password' | 'security'>('profile');
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
@@ -34,11 +34,12 @@ export default function ProfilePage() {
   const changePassword = useMutation({
     mutationFn: async (data: { currentPassword: string; newPassword: string }) =>
       (await api.post('/auth/change-password', data)).data,
-    onSuccess: () => {
-      toast.success('Password changed successfully. Please log in again.');
+    onSuccess: async () => {
+      toast.success('Password changed successfully. Logging out...');
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
       setPasswordErrors({});
       qc.clear();
+      await logout();
     },
     onError: (e) => toast.error(getApiError(e, 'Failed to change password')),
   });

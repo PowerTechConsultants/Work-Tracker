@@ -20,7 +20,7 @@ const Sidebar = ({ mobile = false, nav, pathname, handleMobileClose, user, logou
     </div>
     <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
       {nav.filter((n) => n.show).map((n) => {
-        const active = pathname === n.href;
+        const active = pathname === n.href || pathname.startsWith(n.href + '/');
         return (
           <Link key={n.name} href={n.href} onClick={mobile ? handleMobileClose : undefined}
             className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-xl transition ${active ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
