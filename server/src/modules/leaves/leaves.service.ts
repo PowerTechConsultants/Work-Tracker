@@ -92,7 +92,9 @@ async function countWorkingDays(userId: string, start: string, end: string, holi
   const endD = new Date(`${end}T00:00:00Z`);
   let count = 0;
   while (cur <= endD) {
-    if (!excluded.has(cur.toISOString().split('T')[0]!)) count++;
+    const iso = cur.toISOString().split('T')[0]!;
+    if (isSundayIST(iso)) { cur.setUTCDate(cur.getUTCDate() + 1); continue; }
+    if (!excluded.has(iso)) count++;
     cur.setUTCDate(cur.getUTCDate() + 1);
   }
   return count;
@@ -105,7 +107,7 @@ async function workingDates(userId: string, start: string, end: string): Promise
   const endD = new Date(`${end}T00:00:00Z`);
   while (cur <= endD) {
     const iso = cur.toISOString().split('T')[0]!;
-    if (!excluded.has(iso)) dates.push(iso);
+    if (!isSundayIST(iso) && !excluded.has(iso)) dates.push(iso);
     cur.setUTCDate(cur.getUTCDate() + 1);
   }
   return dates;
@@ -126,7 +128,9 @@ async function daysWithinYear(userId: string, start: string, end: string, year: 
   const endD = new Date(`${clampEnd}T00:00:00Z`);
   let count = 0;
   while (cur <= endD) {
-    if (!excluded.has(cur.toISOString().split('T')[0]!)) count++;
+    const iso = cur.toISOString().split('T')[0]!;
+    if (isSundayIST(iso)) { cur.setUTCDate(cur.getUTCDate() + 1); continue; }
+    if (!excluded.has(iso)) count++;
     cur.setUTCDate(cur.getUTCDate() + 1);
   }
   return count;

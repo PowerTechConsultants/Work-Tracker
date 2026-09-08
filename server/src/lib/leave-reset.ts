@@ -1,5 +1,5 @@
 import db, { uuid, getSetting, setSetting } from '../db';
-import { getISTDate, parseUTC } from './time';
+import { getISTDate, parseUTC, isSundayIST } from './time';
 
 const LEAVE_BALANCE = { casual: 8, sick: 8, proposal: 16 };
 
@@ -22,7 +22,9 @@ async function countWorkingDays(userId: string, start: string, end: string): Pro
   const excluded = await getExcludedDates(userId, start, end);
   let count = 0;
   while (cur <= endD) {
-    if (!excluded.has(cur.toISOString().split('T')[0]!)) count++;
+    const iso = cur.toISOString().split('T')[0]!;
+    if (isSundayIST(iso)) { cur.setUTCDate(cur.getUTCDate() + 1); continue; }
+    if (!excluded.has(iso)) count++;
     cur.setUTCDate(cur.getUTCDate() + 1);
   }
   return count;

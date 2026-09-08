@@ -84,7 +84,7 @@ if (fs.existsSync(schemaMysqlPath)) {
   for (const stmt of stmts) {
     if (!stmt) continue;
     // schema.mysql.sql is already MySQL-native — don't apply translateExec (it would convert TEXT to VARCHAR(255))
-    try { await pool.query(stmt); } catch (e: any) { if (!e.message?.includes('already exists') && !e.message?.includes('Duplicate')) console.error('[DB] Schema:', e.message); }
+    try { await pool.query(stmt); } catch (e: any) { if (!e.message?.includes('already exists') && !e.message?.toLowerCase().includes('duplicate')) console.error('[DB] Schema:', e.message); }
   }
 }
 
@@ -146,7 +146,7 @@ const db = {
         await (conn ?? pool).query(t);
       } catch (e: any) {
         const msg = e.message ?? '';
-        if (msg.includes('already exists') || msg.includes('Duplicate') || msg.includes('ER_DUP_ENTRY') || msg.includes('Duplicate entry')) continue;
+        if (msg.includes('already exists') || msg.toLowerCase().includes('duplicate') || msg.includes('ER_DUP_ENTRY')) continue;
         console.error('[DB] exec failed:', msg);
         throw e;
       }

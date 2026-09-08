@@ -1,5 +1,5 @@
 import db, { uuid } from '../../db';
-import { getISTDate, parseUTC } from '../../lib/time';
+import { getISTDate, getISTNow, parseUTC } from '../../lib/time';
 import { getIO } from '../../lib/socket';
 import { cache } from '../../lib/cache';
 import { AppError } from '../../lib/app-error';
@@ -144,8 +144,9 @@ export class AttendanceService {
     let today = getISTDate();
     let rec = await db.prepare('SELECT * FROM attendance WHERE user_id = ? AND date = ?').get(userId, today) as any;
     if (!rec) {
-      const yesterday = new Date(); yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split('T')[0]!;
+      const istNow = getISTNow();
+      istNow.setUTCDate(istNow.getUTCDate() - 1);
+      const yesterdayStr = istNow.toISOString().split('T')[0]!;
       rec = await db.prepare('SELECT * FROM attendance WHERE user_id = ? AND date = ?').get(userId, yesterdayStr) as any;
       if (rec) today = yesterdayStr;
     }
@@ -171,8 +172,9 @@ export class AttendanceService {
     let today = getISTDate();
     let rec = await db.prepare('SELECT * FROM attendance WHERE user_id = ? AND date = ?').get(userId, today) as any;
     if (!rec) {
-      const yesterday = new Date(); yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split('T')[0]!;
+      const istNow = getISTNow();
+      istNow.setUTCDate(istNow.getUTCDate() - 1);
+      const yesterdayStr = istNow.toISOString().split('T')[0]!;
       rec = await db.prepare('SELECT * FROM attendance WHERE user_id = ? AND date = ?').get(userId, yesterdayStr) as any;
       if (rec) today = yesterdayStr;
     }
