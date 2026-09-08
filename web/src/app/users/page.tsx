@@ -70,7 +70,10 @@ export default function UsersPage() {
     if (!form.dob) errors.dob = 'DOB is required';
     else {
       const d = new Date(form.dob + 'T00:00:00Z');
-      const age = new Date().getFullYear() - d.getUTCFullYear();
+      const today = new Date();
+      let age = today.getFullYear() - d.getUTCFullYear();
+      const mDiff = today.getMonth() - d.getUTCMonth();
+      if (mDiff < 0 || (mDiff === 0 && today.getDate() < d.getUTCDate())) age--;
       if (isNaN(d.getTime()) || d >= new Date() || age < 18) errors.dob = 'Must be at least 18 years old';
     }
     if (!form.gender) errors.gender = 'Gender is required';

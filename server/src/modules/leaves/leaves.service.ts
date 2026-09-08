@@ -372,7 +372,7 @@ export class LeavesService {
 
     const totalBalance = entitlement.total;
     const totalAvailable = totalBalance + carryover;
-    const totalRemaining = Math.max(0, totalAvailable - usage.used);
+    const totalRemaining = Math.max(0, totalAvailable - usage.used - usage.extraUsed);
 
     return {
       balances,
