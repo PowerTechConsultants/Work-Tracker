@@ -7,9 +7,16 @@ data.db
 *.db-shm
 .env
 .env.local
+.env.production
 backup/
 *.log
 uploads/
+test-pdfs/
+web/scripts/sample-output/
+gen_test_pdfs.cjs
+sign.jpeg
+*.bak
+web/certs/lan-ips.json
 .pnp
 .pnp.js
 .yarn/
