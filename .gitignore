@@ -30,3 +30,10 @@ yarn-error.log*
 out/
 server_out.txt
 server_err.txt
+
+hostinger-clean.sql
+import-to-hostinger.mjs
+START_*.bat
+STOP_*.bat
+server_err.txt
+server_out.txt
