@@ -82,9 +82,10 @@ function translateSql(sql: string): string {
     .replace(/strftime\('%H',\s*([^)]+)\)/g, 'HOUR($1)')
     .replace(/strftime\('%M',\s*([^)]+)\)/g, 'MINUTE($1)')
     .replace(/strftime\('%S',\s*([^)]+)\)/g, 'SECOND($1)')
-    .replace(/julianday\(([^)]+)\)/g, 'JULIANDATE($1)')
+    .replace(/julianday\(([^)]+)\)/g, 'TO_DAYS($1)')
     .replace(/substr\(/g, 'SUBSTRING(')
-    .replace(/AS INTEGER/g, 'AS SIGNED');
+    .replace(/AS INTEGER/gi, 'AS SIGNED')
+    .replace(/\bAUTOINCREMENT\b/gi, 'AUTO_INCREMENT');
 }
 
 function translateExec(sql: string): string {
@@ -96,7 +97,8 @@ function translateExec(sql: string): string {
     .replace(/\bTEXT NOT NULL\b/g, 'VARCHAR(255) NOT NULL')
     .replace(/\bTEXT UNIQUE\b/g, 'VARCHAR(255) UNIQUE')
     .replace(/\bREAL\b/g, 'DECIMAL(10,2)')
-    .replace(/\bINTEGER\b/g, 'INT');
+    .replace(/\bINTEGER\b/g, 'INT')
+    .replace(/\bTEXT\b/g, 'VARCHAR(255)');
   // MySQL doesn't support CREATE INDEX IF NOT EXISTS — strip it
   s = s.replace(/CREATE\s+(UNIQUE\s+)?INDEX\s+IF\s+NOT\s+EXISTS/gi, 'CREATE $1INDEX');
   return s;
@@ -239,9 +241,9 @@ const migrations: Array<{ version: number; name: string; up: () => Promise<void>
       await addColumnIfMissing('attendance', 'pause_start_time', 'pause_start_time TEXT');
       await addColumnIfMissing('attendance', 'pause_end_time', 'pause_end_time TEXT');
       await addColumnIfMissing('attendance', 'pause_minutes', 'pause_minutes REAL DEFAULT 0');
-      await db.exec(`CREATE TABLE IF NOT EXISTS holidays (id TEXT PRIMARY KEY, date TEXT NOT NULL, name TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'public', created_by TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')), FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL)`);
-      await db.exec(`CREATE TABLE IF NOT EXISTS holiday_assignees (holiday_id TEXT NOT NULL, user_id TEXT NOT NULL, PRIMARY KEY (holiday_id, user_id), FOREIGN KEY (holiday_id) REFERENCES holidays(id) ON DELETE CASCADE, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)`);
-      await db.exec(`CREATE TABLE IF NOT EXISTS password_reset_tokens (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, token_hash TEXT NOT NULL, expires_at TEXT NOT NULL, used_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)`);
+      await db.exec(`CREATE TABLE IF NOT EXISTS holidays (id VARCHAR(36) PRIMARY KEY, date DATE NOT NULL, name VARCHAR(255) NOT NULL, type VARCHAR(20) NOT NULL DEFAULT 'public', created_by VARCHAR(36), created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL)`);
+      await db.exec(`CREATE TABLE IF NOT EXISTS holiday_assignees (holiday_id VARCHAR(36) NOT NULL, user_id VARCHAR(36) NOT NULL, PRIMARY KEY (holiday_id, user_id), FOREIGN KEY (holiday_id) REFERENCES holidays(id) ON DELETE CASCADE, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)`);
+      await db.exec(`CREATE TABLE IF NOT EXISTS password_reset_tokens (id VARCHAR(36) PRIMARY KEY, user_id VARCHAR(36) NOT NULL, token_hash VARCHAR(255) NOT NULL, expires_at DATETIME NOT NULL, used_at DATETIME, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)`);
       await db.exec('CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance(date)');
       await db.exec('CREATE INDEX IF NOT EXISTS idx_attendance_status ON attendance(status)');
       await db.exec('CREATE INDEX IF NOT EXISTS idx_leaves_dates ON leaves(start_date, end_date)');
@@ -269,7 +271,7 @@ const migrations: Array<{ version: number; name: string; up: () => Promise<void>
       await db.exec('CREATE INDEX IF NOT EXISTS idx_holidays_date ON holidays(date)');
       await db.exec('CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_hash ON password_reset_tokens(token_hash)');
       await db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_employee_id ON users(employee_id)');
-      await db.exec(`CREATE TABLE IF NOT EXISTS api_cache (cache_key TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at TEXT NOT NULL)`);
+      await db.exec(`CREATE TABLE IF NOT EXISTS api_cache (cache_key VARCHAR(255) PRIMARY KEY, data TEXT NOT NULL, expires_at DATETIME NOT NULL)`);
       await db.exec('CREATE INDEX IF NOT EXISTS idx_api_cache_expires ON api_cache(expires_at)');
       await addColumnIfMissing('leaves', 'deducted_from', 'deducted_from TEXT');
       await addColumnIfMissing('attendance', 'latitude', 'latitude REAL');
