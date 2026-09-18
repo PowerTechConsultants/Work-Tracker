@@ -53,9 +53,11 @@ for (let attempt = 1; attempt <= 3; attempt++) {
     }
     break;
   } catch (e: any) {
-    console.error(`[DB] MySQL connection failed (attempt ${attempt}/3):`, e.message);
+    console.error(`[DB] MySQL connection failed (attempt ${attempt}/3):`, e.message || e.code || e.errno || e.sqlMessage || String(e));
+    if (e.code) console.error('[DB] code:', e.code, 'errno:', e.errno, 'sqlState:', e.sqlState);
     if (attempt === 3) {
       console.error('[DB] All retries exhausted — exiting');
+      console.error('[DB] Env:', { host, port, user, database, sslEnabled });
       process.exit(1);
     }
     await new Promise((r) => setTimeout(r, attempt * 2000));

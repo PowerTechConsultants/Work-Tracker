@@ -42,6 +42,19 @@ jobs:
       - name: Build (server)
         run: npm run build -w server
 
+      - name: Wait for MySQL
+        run: |
+          echo "Waiting for MySQL to be ready..."
+          for i in {1..30}; do
+            if mysqladmin ping -h 127.0.0.1 -P 3306 -u root -ptestroot --silent 2>/dev/null; then
+              echo "MySQL is ready"
+              break
+            fi
+            echo "Waiting... $i/30"
+            sleep 2
+          done
+          mysqladmin ping -h 127.0.0.1 -P 3306 -u root -ptestroot --silent || (echo "MySQL not ready" && exit 1)
+
       - name: Setup test database
         run: npm run setup
         env:
