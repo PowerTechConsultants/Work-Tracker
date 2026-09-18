@@ -34,13 +34,13 @@
     "tailwind-merge": "^2.6.0",
     "tailwindcss": "^4",
     "typescript": "^5",
+    "vitest": "^3.0.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.0.0",
     "eslint": "^9",
     "eslint-config-next": "^15.1.0",
-    "selfsigned": "^5.5.0",
-    "vitest": "^3.0.0"
+    "selfsigned": "^5.5.0"
   }
 }
