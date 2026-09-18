@@ -1,6 +1,7 @@
 'use client';
 
 import DashboardLayout from '@/components/DashboardLayout';
+import { useAuth } from '@/context/AuthContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import { apiEndpoints } from '@/lib/api-endpoints';
@@ -18,7 +19,6 @@ const FileUpload = dynamic(() => import('@/components/FileUpload'), { ssr: false
 
 interface FileRecord {
   id: string;
-  filename: string;
   originalName: string;
   mimetype: string;
   size: number;
@@ -39,9 +39,10 @@ const FILE_ICONS: Record<string, any> = {
   'application/zip': Archive,
 };
 
-function getFileIcon(mimetype: string) {
-  if (mimetype.startsWith('image/')) return FILE_ICONS['image'];
-  return FILE_ICONS[mimetype] ?? File;
+function getFileIcon(mimetype?: string | null) {
+  const mt = (mimetype || '').toLowerCase();
+  if (mt.startsWith('image/')) return FILE_ICONS['image'];
+  return FILE_ICONS[mt] ?? File;
 }
 
 function formatFileSize(bytes: number) {
@@ -55,12 +56,14 @@ function formatFileSize(bytes: number) {
 const PAGE_SIZE = 24;
 
 export default function FilesPage() {
+  const { user } = useAuth();
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [page, setPage] = useState(1);
   const [typeFilter, setTypeFilter] = useState('all');
   const [showUpload, setShowUpload] = useState(false);
   const qc = useQueryClient();
   const confirmCtx = useConfirm();
+  const canDelete = user?.role === 'director' || user?.role === 'hr';
 
   const params: Record<string, any> = { limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE };
   if (typeFilter !== 'all') params.type = typeFilter;
@@ -70,7 +73,16 @@ export default function FilesPage() {
     queryFn: async () => (await apiEndpoints.files.list(params)).data,
   });
 
-  const files: FileRecord[] = data?.files ?? data ?? [];
+  const rawFiles: any[] = data?.files ?? data ?? [];
+  const files: FileRecord[] = rawFiles.map((f: any) => ({
+    id: f.id,
+    originalName: f.originalName ?? f.filename ?? '',
+    mimetype: f.mimeType ?? f.mimetype ?? '',
+    size: f.sizeBytes ?? f.size ?? 0,
+    url: f.url ?? '',
+    uploader: f.uploader,
+    createdAt: f.createdAt ?? f.created_at ?? '',
+  }));
   const total: number = data?.total ?? files.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const storageUsed: number = data?.storageUsed ?? 0;
@@ -187,12 +199,18 @@ export default function FilesPage() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {files.map((f) => {
               const Icon = getFileIcon(f.mimetype);
-              const isImage = f.mimetype.startsWith('image/');
+              const isImage = (f.mimetype || '').startsWith('image/');
               return (
                 <div key={f.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden group hover:border-slate-700 transition">
-                  {isImage && f.url ? (
+                  {isImage ? (
                     <div className="h-32 bg-slate-800 overflow-hidden">
-                      <img src={f.url} alt={f.originalName} className="w-full h-full object-cover" />
+                      <img src={`/api/v1/files/${f.id}/download`} alt={f.originalName} className="w-full h-full object-cover" onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                        (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                      }} />
+                      <div className="hidden h-32 bg-slate-800/50 flex items-center justify-center">
+                        <Icon className="h-10 w-10 text-slate-600" />
+                      </div>
                     </div>
                   ) : (
                     <div className="h-32 bg-slate-800/50 flex items-center justify-center">
@@ -208,9 +226,11 @@ export default function FilesPage() {
                       <button onClick={() => downloadFile(f)} className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition">
                         <Download className="h-3.5 w-3.5" />
                       </button>
-                      <button onClick={() => deleteFile(f)} className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      {canDelete && (
+                        <button onClick={() => deleteFile(f)} className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -251,9 +271,11 @@ export default function FilesPage() {
                             <button onClick={() => downloadFile(f)} className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition">
                               <Download className="h-4 w-4" />
                             </button>
-                            <button onClick={() => deleteFile(f)} className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition">
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                            {canDelete && (
+                              <button onClick={() => deleteFile(f)} className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition">
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>

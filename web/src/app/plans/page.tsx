@@ -28,6 +28,7 @@ export default function PlansPage() {
   const { data: usersData } = useQuery({
     queryKey: ['usersList'],
     queryFn: async () => (await api.get('/users?limit=100')).data,
+    retry: false,
     enabled: isAdmin && !loading && !!user,
   });
 

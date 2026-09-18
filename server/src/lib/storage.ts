@@ -17,7 +17,7 @@ class LocalStorage implements StorageProvider {
   }
 
   private sanitizeKey(key: string): string {
-    const normalized = path.posix.normalize(key).replace(/^(\.\.[\/\\])+/, '');
+    const normalized = path.posix.normalize(key).replace(/^(\.\.[/\\])+/, '');
     if (normalized.includes('..')) throw new Error('Invalid file key');
     return normalized;
   }

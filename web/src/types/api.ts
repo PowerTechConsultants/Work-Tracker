@@ -315,6 +315,17 @@ export interface DocumentRequest {
   designation: string | null;
   departmentName: string | null;
   joiningDate: string | null;
+  dob?: string | null;
+  qualification?: string | null;
+  gender?: 'male' | 'female' | 'other' | null;
+  addressStreet?: string | null;
+  addressCity?: string | null;
+  addressState?: string | null;
+  addressPincode?: string | null;
+  fatherName?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  tenure?: string | null;
   issuedByName: string | null;
 }
 

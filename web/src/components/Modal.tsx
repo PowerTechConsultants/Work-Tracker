@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import React from 'react';
+
+let openModals = 0;
 
 interface ModalProps {
   open: boolean;
@@ -13,17 +15,26 @@ interface ModalProps {
 }
 
 export default function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }: ModalProps) {
+  const wasOpen = useRef(false);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     document.addEventListener('keydown', onKey);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    if (openModals === 0) {
+      document.body.style.overflow = 'hidden';
+    }
+    openModals++;
+    wasOpen.current = true;
     return () => {
       document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prevOverflow;
+      openModals = Math.max(0, openModals - 1);
+      if (openModals === 0) {
+        document.body.style.overflow = '';
+      }
+      wasOpen.current = false;
     };
   }, [open, onClose]);
 

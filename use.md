@@ -2,7 +2,7 @@
 
 ## Roles & Permissions
 
-| Feature | Admin | HR | Employee |
+| Feature | Director | HR | Employee |
 |---------|-------|----|----------|
 | Attendance (self) | Full | Full | Full |
 | Attendance (others) | View/edit all | View/edit all | Own only |
@@ -48,7 +48,7 @@
 #### View Monthly Summary
 1. Go to **Attendance** page
 2. View current month's statistics: present days, absent days, leaves, total working hours, overtime
-3. Admin/HR can view any user's summary by selecting from the user list
+3. Director/HR can view any user's summary by selecting from the user list
 
 ### 2. Leave Management
 
@@ -60,7 +60,7 @@
 5. Enter reason and submit
 6. Status shows `pending` until reviewed
 
-#### Review Leave (Admin/HR)
+#### Review Leave (Director/HR)
 1. Go to **Leaves** → **Pending Requests**
 2. Review the application details
 3. **Approve** — auto-creates `leave` attendance records for the date range
@@ -68,7 +68,7 @@
 
 #### Cancel Leave
 - **Employee:** Can cancel own pending leaves
-- **Admin/HR:** Can cancel any approved/pending leave
+- **Director/HR:** Can cancel any approved/pending leave
 - Cancellation removes associated attendance records
 
 #### Leave Balance
@@ -77,7 +77,7 @@
 
 ### 3. Task Management
 
-#### Create Task (Admin/HR)
+#### Create Task (Director/HR)
 1. Go to **Tasks** → **Create Task**
 2. Enter title, description, priority (low/medium/high/urgent)
 3. Set due date and estimated hours
@@ -93,7 +93,7 @@
 1. Open a task
 2. Click **Request Approval**
 3. Add a review comment
-4. Admin/HR reviews and approves/rejects
+4. Director/HR reviews and approves/rejects
 
 ### 4. Work Plans
 
@@ -106,7 +106,7 @@
 
 #### Submit & Review
 - **Submit** plan to make it visible to managers
-- **Admin/HR** can review and provide feedback
+- **Director/HR** can review and provide feedback
 - Statuses: `draft` → `submitted` → `approved` / `needs_improvement`
 
 ### 5. Work Reports
@@ -117,12 +117,12 @@
 3. Fill in: work completed, current progress, pending work, blockers, tomorrow's plan
 4. Submit for manager review
 
-#### Review Reports (Admin/HR)
+#### Review Reports (Director/HR)
 1. View submitted reports from all employees
 2. Add feedback and mark as reviewed
 3. Track blockers and pending work across the team
 
-### 6. Team Management (Admin/HR)
+### 6. Team Management (Director/HR)
 
 #### Create Department
 1. Go to **Departments**
@@ -133,7 +133,7 @@
 2. Create team with name and department
 3. Add/remove members
 
-### 7. Holidays (Admin/HR)
+### 7. Holidays (Director/HR)
 
 1. Go to **Holidays**
 2. Click **Add Holiday** — set date, name, and type
@@ -143,9 +143,9 @@
 ### 8. Dashboard
 
 - **Employee:** View today's attendance status, assigned tasks, pending leaves, upcoming plans
-- **Admin/HR:** View organization-wide stats — active employees, present/absent today, pending approvals, department breakdown
+- **Director/HR:** View organization-wide stats — active employees, present/absent today, pending approvals, department breakdown
 
-### 9. Analytics (Admin/HR)
+### 9. Analytics (Director/HR)
 
 Go to **Analytics** from sidebar:
 
@@ -161,7 +161,7 @@ Go to **Analytics** from sidebar:
 - Click to view and mark as read
 - Types: leave approved/rejected, task assigned, plan reviewed, report feedback
 
-### 11. Activity Logs (Admin/HR)
+### 11. Activity Logs (Director/HR)
 
 - Complete audit trail of all system changes
 - Filter by entity type, action, and date range

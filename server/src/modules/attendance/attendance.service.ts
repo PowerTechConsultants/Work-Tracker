@@ -6,11 +6,12 @@ import { AppError } from '../../lib/app-error';
 
 const HALF_DAY_THRESHOLD = 4;
 
-function invalidateAnalyticsCache() {
+function invalidateAttendanceCache() {
   try {
-    cache.delByPrefix('/api/v1/analytics/');
+    cache.delContaining('/api/v1/attendance/');
+    cache.delContaining('/api/v1/analytics/');
   } catch (e) {
-    console.error('[Attendance] Analytics cache invalidation failed:', e);
+    console.error('[Attendance] Cache invalidation failed:', e);
   }
 }
 
@@ -89,7 +90,7 @@ export class AttendanceService {
         }
         const rec = await db.prepare('SELECT * FROM attendance WHERE id = ?').get(existing.id);
         logEvent(existing.id, userId, 'check_in', { latitude: input.latitude, longitude: input.longitude, accuracy: input.accuracy, locationCapturedAt: input.locationCapturedAt }, now);
-        invalidateAnalyticsCache();
+        invalidateAttendanceCache();
         emitAttendanceUpdated(userId, rec);
         return rec;
       }
@@ -110,7 +111,7 @@ export class AttendanceService {
     }
     const rec = await db.prepare('SELECT * FROM attendance WHERE id = ?').get(id);
     logEvent(id, userId, 'check_in', { latitude: input.latitude, longitude: input.longitude, accuracy: input.accuracy, locationCapturedAt: input.locationCapturedAt }, now);
-    invalidateAnalyticsCache();
+    invalidateAttendanceCache();
     emitAttendanceUpdated(userId, rec);
     return rec;
   }
@@ -135,7 +136,7 @@ export class AttendanceService {
     await db.prepare("UPDATE attendance SET pause_start_time = ?, pause_end_time = NULL, status = 'on_break', updated_at = ? WHERE id = ?").run(now, now, rec.id);
     logEvent(rec.id, userId, 'pause_start', input, now);
     const updated = await db.prepare('SELECT * FROM attendance WHERE id = ?').get(rec.id);
-    invalidateAnalyticsCache();
+    invalidateAttendanceCache();
     emitAttendanceUpdated(userId, updated);
     return updated;
   }
@@ -155,15 +156,17 @@ export class AttendanceService {
 
     const now = new Date();
     const pauseStart = parseUTC(rec.pause_start_time);
-    const pauseDuration = Math.round((now.getTime() - pauseStart.getTime()) / 60000);
-    const totalPause = (rec.pause_minutes ?? 0) + pauseDuration;
+    const prevMinutes = Number(rec.pause_minutes ?? 0) || 0;
+    const pauseDuration = Math.round((now.getTime() - pauseStart.getTime()) / 600) / 100;
+    const totalPause = Math.round((prevMinutes + pauseDuration) * 100) / 100;
     const nowIso = now.toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
 
-    await db.prepare("UPDATE attendance SET pause_end_time = ?, pause_minutes = ?, status = 'present', updated_at = ? WHERE id = ?")
-      .run(nowIso, totalPause, nowIso, rec.id);
+    const restoreStatus = rec.status === 'remote' ? 'remote' : 'present';
+    await db.prepare(`UPDATE attendance SET pause_end_time = ?, pause_minutes = ?, status = ?, updated_at = ? WHERE id = ?`)
+      .run(nowIso, totalPause, restoreStatus, nowIso, rec.id);
     logEvent(rec.id, userId, 'pause_end', input, nowIso);
     const updated = await db.prepare('SELECT * FROM attendance WHERE id = ?').get(rec.id);
-    invalidateAnalyticsCache();
+    invalidateAttendanceCache();
     emitAttendanceUpdated(userId, updated);
     return updated;
   }
@@ -186,10 +189,10 @@ export class AttendanceService {
     const nowIso = now.toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
     const loginTime = rec.login_time ? parseUTC(rec.login_time) : now;
 
-    let pauseMinutes = rec.pause_minutes ?? 0;
+    let pauseMinutes = Number(rec.pause_minutes ?? 0) || 0;
     if (rec.pause_start_time && !rec.pause_end_time) {
       const pauseStart = parseUTC(rec.pause_start_time);
-      pauseMinutes += Math.round((now.getTime() - pauseStart.getTime()) / 60000);
+      pauseMinutes += Math.round((now.getTime() - pauseStart.getTime()) / 600) / 100;
       logEvent(rec.id, userId, 'pause_end', {}, nowIso);
     }
 
@@ -206,12 +209,14 @@ export class AttendanceService {
     await db.prepare(`UPDATE attendance SET
       logout_time = ?, working_hours = ?, overtime_hours = ?,
       pause_minutes = ?, pause_end_time = COALESCE(pause_end_time, ?),
+      latitude = COALESCE(?, latitude), longitude = COALESCE(?, longitude),
+      location_accuracy = COALESCE(?, location_accuracy), location_captured_at = COALESCE(?, location_captured_at),
       status = ?, updated_at = ? WHERE id = ?`)
-      .run(nowIso, workingHours, overtimeHours, pauseMinutes, rec.pause_start_time ? nowIso : null, status, nowIso, rec.id);
+      .run(nowIso, workingHours, overtimeHours, pauseMinutes, rec.pause_start_time ? nowIso : null, input?.latitude ?? null, input?.longitude ?? null, input?.accuracy ?? null, input?.locationCapturedAt ?? null, status, nowIso, rec.id);
 
     const updated = await db.prepare('SELECT * FROM attendance WHERE id = ?').get(rec.id);
     logEvent(rec.id, userId, 'check_out', input, nowIso);
-    invalidateAnalyticsCache();
+    invalidateAttendanceCache();
     emitAttendanceUpdated(userId, updated);
     return updated;
   }
@@ -242,7 +247,7 @@ export class AttendanceService {
 
   static async getTodayStatus(userId: string) {
     const today = getISTDate();
-    return await db.prepare('SELECT id, user_id, date, status, login_time, logout_time, working_hours, overtime_hours, pause_minutes, latitude, longitude, location_accuracy, location_captured_at, notes, created_at, updated_at FROM attendance WHERE user_id = ? AND date = ?').get(userId, today) ?? null;
+    return await db.prepare('SELECT id, user_id, date, status, login_time, logout_time, working_hours, overtime_hours, pause_start_time, pause_end_time, pause_minutes, latitude, longitude, location_accuracy, location_captured_at, notes, created_at, updated_at FROM attendance WHERE user_id = ? AND date = ?').get(userId, today) ?? null;
   }
 
   static async getTodayAll() {
@@ -327,7 +332,7 @@ export class AttendanceService {
       deleted = result.changes;
     }
     const result = { deleted, scope: { userId: input.userId ?? null, userIds: input.userIds ?? null, status: input.status ?? null, startDate: startDate ?? null, endDate: endDate ?? null, date: normalizedDate } };
-    invalidateAnalyticsCache();
+    invalidateAttendanceCache();
     return result;
   }
 
@@ -399,18 +404,29 @@ export class AttendanceService {
     const totalDays = lastDay;
     let sundays = 0;
     for (let d = 1; d <= totalDays; d++) {
-      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       const dow = new Date(Date.UTC(year, month - 1, d)).getUTCDay();
       if (dow === 0) sundays++;
     }
 
     const allHolidays = await db.prepare('SELECT id, date FROM holidays WHERE date >= ? AND date <= ?').all(start, end) as any[];
+    const holidayAssignees = await db.prepare(`
+      SELECT ha.holiday_id, ha.user_id
+      FROM holiday_assignees ha
+      JOIN holidays h ON h.id = ha.holiday_id
+      WHERE h.date >= ? AND h.date <= ?
+    `).all(start, end) as any[];
+    const assigneesByHoliday = new Map<string, string[]>();
+    for (const row of holidayAssignees) {
+      const list = assigneesByHoliday.get(row.holiday_id) ?? [];
+      list.push(row.user_id);
+      assigneesByHoliday.set(row.holiday_id, list);
+    }
     let userHolidayCount = 0;
     for (const h of allHolidays) {
       const dow = new Date(h.date + 'T00:00:00Z').getUTCDay();
       if (dow === 0) continue;
-      const assignees = await db.prepare('SELECT user_id FROM holiday_assignees WHERE holiday_id = ?').all(h.id) as any[];
-      if (assignees.length === 0 || assignees.some((a: any) => a.user_id === userId)) {
+      const assignees = assigneesByHoliday.get(h.id) ?? [];
+      if (assignees.length === 0 || assignees.includes(userId)) {
         userHolidayCount++;
       }
     }

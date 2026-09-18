@@ -49,6 +49,11 @@ export class NotificationsService {
     return { message: 'Notification deleted' };
   }
 
+  static async deleteAll(userId: string) {
+    const result = await db.prepare('DELETE FROM notifications WHERE recipient_id = ?').run(userId);
+    return { message: 'All notifications deleted', count: result.changes };
+  }
+
   static async getStats(userId: string) {
     const stats = await db.prepare('SELECT COUNT(*) as total, SUM(CASE WHEN read_at IS NULL THEN 1 ELSE 0 END) as unread FROM notifications WHERE recipient_id = ?').get(userId) as any;
     const channelStats = await db.prepare('SELECT channel, COUNT(*) as count FROM notifications WHERE recipient_id = ? GROUP BY channel').all(userId) as any[];

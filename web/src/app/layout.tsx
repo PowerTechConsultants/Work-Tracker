@@ -4,6 +4,8 @@ import { AuthProvider } from '@/context/AuthContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ToastProvider } from '@/components/Toast';
 import { ConfirmProvider } from '@/components/ConfirmDialog';
+import SplashScreen from '@/components/SplashScreen';
+import RouteLoadingIndicator from '@/components/RouteLoadingIndicator';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -29,10 +31,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ErrorBoundary>
           <QueryProvider>
             <AuthProvider>
-              <ToastProvider />
-              <ConfirmProvider>
-                {children}
-              </ConfirmProvider>
+              <SplashScreen>
+                <RouteLoadingIndicator />
+                <ToastProvider />
+                <ConfirmProvider>
+                  {children}
+                </ConfirmProvider>
+              </SplashScreen>
             </AuthProvider>
           </QueryProvider>
         </ErrorBoundary>

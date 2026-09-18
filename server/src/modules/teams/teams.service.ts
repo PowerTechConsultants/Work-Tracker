@@ -55,6 +55,9 @@ export class TeamsService {
   static async update(teamName: string, input: { memberIds: string[]; leaderId?: string }) {
     const exists = (await db.prepare('SELECT count(*) as c FROM team_members WHERE team_name = ?').get(teamName) as any).c;
     if (exists === 0) throw new AppError(404, 'Team not found');
+    if (input.leaderId && !input.memberIds.includes(input.leaderId)) {
+      throw new AppError(400, 'Leader must be a team member');
+    }
     await db.transaction(async () => {
       await db.prepare('DELETE FROM team_members WHERE team_name = ?').run(teamName);
       if (input.memberIds.length > 0) {

@@ -1,5 +1,4 @@
 import db from '../db';
-import { AppError } from './app-error';
 
 export interface PasswordPolicy {
   minLength: number;
@@ -55,7 +54,7 @@ export async function validatePassword(password: string, policy?: PasswordPolicy
   if (p.requireNumber && !/[0-9]/.test(password)) {
     errors.push('Password must contain at least one number');
   }
-  if (p.requireSpecial && !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(password)) {
+  if (p.requireSpecial && !/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?`~]/.test(password)) {
     errors.push('Password must contain at least one special character');
   }
 

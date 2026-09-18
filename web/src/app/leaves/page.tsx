@@ -97,7 +97,7 @@ export default function LeavesPage() {
   });
   const { data: balance } = useQuery({ queryKey: ['leaveBal'], queryFn: async () => (await api.get('/leaves/balance')).data, enabled: !loading && !!user });
   const totalRemaining = (balance?.totalAvailable ?? balance?.totalBalance ?? 0) - (balance?.totalUsed ?? 0);
-  const { data: holidaysRes } = useQuery({ queryKey: ['holidays'], queryFn: async () => (await api.get('/holidays', { params: { limit: 366 } })).data, enabled: !loading && !!user });
+  const { data: holidaysRes } = useQuery({ queryKey: ['holidays'], queryFn: async () => (await api.get('/holidays', { params: { limit: 100 } })).data, enabled: !loading && !!user });
   const holidays = useMemo(() => holidaysRes?.holidays ?? [], [holidaysRes]);
   const todayIST = getTodayIST();
 
@@ -229,7 +229,12 @@ export default function LeavesPage() {
 
   const createLeave = useMutation({
     retry: 0,
-    mutationFn: async (d: typeof form) => (await api.post('/leaves', { type: d.type, startDate: d.startDate, endDate: d.endDate, reason: d.reason || undefined })).data,
+    mutationFn: async (d: typeof form) => (await api.post('/leaves', { 
+      type: d.type, 
+      startDate: d.startDate ? new Date(d.startDate).toISOString() : undefined, 
+      endDate: d.endDate ? new Date(d.endDate).toISOString() : undefined, 
+      reason: d.reason || undefined 
+    })).data,
     onMutate: () => setError(''),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['leaves'] }); qc.invalidateQueries({ queryKey: ['leaveBal'] }); setShowCreate(false); setForm({ type: 'casual', startDate: '', endDate: '', reason: '' }); },
     onError: (e) => setError(getApiError(e, 'Leave request failed')),

@@ -22,7 +22,7 @@ async function notifyUsers(userIds: string[], senderId: string, title: string, m
 
 function invalidateAnalyticsCache() {
   try {
-    cache.delByPrefix('/api/v1/analytics/');
+    cache.delContaining('/api/v1/analytics/');
   } catch (e) {
     console.error('[Holidays] Analytics cache invalidation failed:', e);
   }

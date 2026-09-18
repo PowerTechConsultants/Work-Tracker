@@ -112,8 +112,6 @@ export class ScheduledReportsService {
 
     try {
       const template = await db.prepare('SELECT * FROM report_templates WHERE id = ?').get(schedule.template_id) as any;
-      let fields: any[] = [];
-      try { fields = template?.fields ? JSON.parse(template.fields) : []; } catch { fields = []; }
 
       // Generate report data based on template type
       let reportData: any = {};
@@ -122,7 +120,9 @@ export class ScheduledReportsService {
         const reports = await db.prepare('SELECT * FROM work_reports WHERE date = ?').all(today);
         reportData = { date: today, reports, count: reports.length };
       } else if (template?.type === 'weekly') {
-        const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
+        const now = new Date();
+        now.setDate(now.getDate() - 7);
+        const weekAgo = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
         const reports = await db.prepare('SELECT * FROM work_reports WHERE date >= ? AND date <= ?').all(weekAgo, today);
         reportData = { startDate: weekAgo, reports, count: reports.length };
       } else {
@@ -130,7 +130,7 @@ export class ScheduledReportsService {
         reportData = { reports: allReports, count: allReports.length };
       }
 
-      const filePath = `/reports/${resultId}.${schedule.format}`;
+      const filePath = null;
 
       await db.prepare(
         `UPDATE scheduled_report_results SET status = 'completed', file_path = ?, result_data = ? WHERE id = ?`

@@ -209,11 +209,13 @@ function EmployeeDashboard({ loading, user }: { loading: boolean; user: any }) {
   );
 }
 
-function AdminDashboard({ loading }: { loading: boolean }) {
+function AdminDashboard({ loading, user }: { loading: boolean; user: any }) {
+  const isAdmin = user?.role === 'director' || user?.role === 'hr';
   const { data: userStats, isLoading: ul, isError: ue } = useQuery({
     queryKey: ['userStats'],
     queryFn: async () => (await api.get('/users/stats')).data,
-    enabled: !loading,
+    enabled: !loading && isAdmin,
+    retry: false,
   });
   const { data: taskStats, isLoading: tl, isError: te } = useQuery({
     queryKey: ['taskStatsAdmin'],
@@ -254,25 +256,44 @@ function AdminDashboard({ loading }: { loading: boolean }) {
       </div>
       {(ue || te || de) && <ErrorBanner message="Failed to load some dashboard data. Refresh to try again." />}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total Users" value={userStats?.total ?? 0} icon={Users} color="bg-violet-500/15 text-violet-400" />
+        {isAdmin && <StatCard label="Total Users" value={userStats?.total ?? 0} icon={Users} color="bg-violet-500/15 text-violet-400" />}
         <StatCard label="Active Tasks" value={taskStats?.total ?? 0} icon={ClipboardList} color="bg-blue-500/15 text-blue-400" />
         <StatCard label="Departments" value={deptStats?.total ?? 0} icon={Building2} color="bg-emerald-500/15 text-emerald-400" />
         <StatCard label="Overdue" value={taskStats?.overdue ?? 0} icon={CalendarDays} color="bg-rose-500/15 text-rose-400" />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-center">
-          <p className="text-2xl font-bold text-white">{userStats?.admins ?? 0}</p>
-          <p className="text-sm text-slate-400">Admins</p>
-        </div>
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-center">
-          <p className="text-2xl font-bold text-white">{userStats?.hrs ?? 0}</p>
-          <p className="text-sm text-slate-400">HR</p>
-        </div>
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-center">
-          <p className="text-2xl font-bold text-white">{userStats?.employees ?? 0}</p>
-          <p className="text-sm text-slate-400">Employees</p>
-        </div>
+        {isAdmin ? (
+          <>
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-center">
+              <p className="text-2xl font-bold text-white">{userStats?.admins ?? 0}</p>
+              <p className="text-sm text-slate-400">Admins</p>
+            </div>
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-center">
+              <p className="text-2xl font-bold text-white">{userStats?.hrs ?? 0}</p>
+              <p className="text-sm text-slate-400">HR</p>
+            </div>
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-center">
+              <p className="text-2xl font-bold text-white">{userStats?.employees ?? 0}</p>
+              <p className="text-sm text-slate-400">Employees</p>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-center">
+              <p className="text-2xl font-bold text-white">-</p>
+              <p className="text-sm text-slate-400">Admins</p>
+            </div>
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-center">
+              <p className="text-2xl font-bold text-white">-</p>
+              <p className="text-sm text-slate-400">HR</p>
+            </div>
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-center">
+              <p className="text-2xl font-bold text-white">-</p>
+              <p className="text-sm text-slate-400">Employees</p>
+            </div>
+          </>
+        )}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-center">
           <p className="text-2xl font-bold text-white">{taskStats?.pending ?? 0}</p>
           <p className="text-sm text-slate-400">Pending Tasks</p>
@@ -320,7 +341,7 @@ export default function DashboardPage() {
 
   return (
     <DashboardLayout>
-      {user.role === 'employee' ? <EmployeeDashboard loading={loading} user={user} /> : <AdminDashboard loading={loading} />}
+      {user.role === 'employee' ? <EmployeeDashboard loading={loading} user={user} /> : <AdminDashboard loading={loading} user={user} />}
     </DashboardLayout>
   );
 }

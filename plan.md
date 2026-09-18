@@ -7,10 +7,10 @@
 **Status**: MVP in development - core workflows implemented, quality gates passing, manual end-to-end browser test remaining.
 
 **Technologies**:
-- **Backend**: Node.js, Express, TypeScript, better-sqlite3, Socket.IO, JWT auth, bcrypt
+- **Backend**: Node.js, Express, TypeScript, mysql2, Socket.IO, JWT auth, bcrypt
 - **Frontend**: Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS 4, Recharts, TanStack React Query, Axios
-- **Database**: SQLite (single file, WAL mode) - no external DB server required
-- **Auth**: JWT access token (in-memory) + refresh token (httpOnly cookie), RBAC (admin/hr/employee)
+- **Database**: MySQL 8.0 with InnoDB - external DB server required
+- **Auth**: JWT access token (in-memory) + refresh token (httpOnly cookie), RBAC (director/hr/employee)
 
 ---
 
@@ -30,13 +30,13 @@ employee-work-tracker/
 │   │   ├── server.ts             ← Entry point
 │   │   ├── middleware/           ← Auth, RBAC, validation, error handler
 │   │   ├── lib/                  ← Config, JWT, time utils, auto-absent, socket
-│   │   ├── db/                   ← SQLite connection, migrations, seed
+│   │   ├── db/                   ← MySQL connection, migrations, setup
 │   │   ├── modules/              ← Feature modules (auth, attendance, tasks, etc.)
 │   │   ├── types/                ← Type definitions
 │   │   └── swagger.ts            ← API documentation
 │   ├── backup/                   ← Timestamped DB backup files
 │   ├── dist/                       ← Compiled output
-│   └── data.db                     ← Main SQLite database
+│   └── .env                        ← MySQL configuration
 ├── web/                          ← Next.js Frontend
 │   ├── package.json
 │   ├── tsconfig.json
@@ -66,8 +66,8 @@ employee-work-tracker/
 |-------|-----------|---------|
 | **Language** | TypeScript | End-to-end type safety |
 | **Backend** | Node.js + Express | REST API server |
-| **ORM/Query** | better-sqlite3 | Raw SQL for SQLite |
-| **Database** | SQLite (data.db) | Single-file, zero-config |
+| **ORM/Query** | mysql2 | Raw SQL for MySQL |
+| **Database** | MySQL 8.0 | External DB server |
 | **Auth** | JWT + bcrypt | Access token (memory) + refresh token (httpOnly cookie) |
 | **Real-time** | Socket.IO | Notifications & real-time updates |
 | **Frontend** | Next.js 15 + React 19 | App Router, server components |
@@ -86,9 +86,9 @@ employee-work-tracker/
 
 ### Phase 1: Foundation (Completed)
 - Project scaffolding with Express + Next.js
-- SQLite schema design with WAL mode
+- MySQL schema design with InnoDB
 - JWT authentication with httpOnly cookie rotation
-- RBAC middleware (admin/hr/employee)
+- RBAC middleware (director/hr/employee)
 - Rate limiting, CORS, Helmet security headers
 - Error handling middleware
 
@@ -175,17 +175,17 @@ All endpoints return JSON. Standard error format: `{ error: string }`. Status co
 |--------|--------|------|
 | **Auth** | login, register, refresh, logout, me, change-password, forgot-password, reset-password | Mixed |
 | **Attendance** | check-in, check-out, pause-start, pause-end, today, monthly, list, update | Yes |
-| **Users** | list, create, update, delete, stats, get-by-id | Yes (admin/hr) |
-| **Departments** | list, create, update, delete, stats, get-by-id | Yes (admin/hr) |
+| **Users** | list, create, update, delete, stats, get-by-id | Yes (director/hr) |
+| **Departments** | list, create, update, delete, stats, get-by-id | Yes (director/hr) |
 | **Teams** | list, create, update, delete, add/remove members, my-teams | Yes |
 | **Tasks** | CRUD, list, stats, comments, approvals | Yes |
 | **Plans** | CRUD, submit, review | Yes |
 | **Reports** | CRUD, submit, review | Yes |
 | **Leaves** | CRUD, balance, review, cancel | Yes |
 | **Notifications** | list, mark-read, mark-all-read, delete | Yes |
-| **Activity Logs** | list | Yes (admin/hr) |
-| **Holidays** | list, create, delete | Yes (admin/hr) |
-| **Analytics** | attendance-trends, department-stats, leave-usage, task-summary | Yes (admin/hr) |
+| **Activity Logs** | list | Yes (director/hr) |
+| **Holidays** | list, create, delete | Yes (director/hr) |
+| **Analytics** | attendance-trends, department-stats, leave-usage, task-summary | Yes (director/hr) |
 
 ### Auth Methods
 - `Authorization: Bearer <access-token>` header

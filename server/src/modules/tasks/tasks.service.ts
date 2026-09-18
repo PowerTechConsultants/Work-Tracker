@@ -260,7 +260,7 @@ export class TasksService {
     const statusMap = Object.fromEntries(stats.map((r: any) => [r.status, r.count]));
     const total = stats.reduce((sum: number, r: any) => sum + r.count, 0);
     const today = getISTDate();
-    const overdue = (await db.prepare(`SELECT COUNT(*) as c FROM tasks ${where ? where + ' AND' : 'WHERE'} due_date < ? AND status NOT IN ('completed', 'cancelled')`).get(...params, today) as any).c;
+    const overdue = (await db.prepare(`SELECT COUNT(*) as c FROM tasks ${where ? where + ' AND' : 'WHERE'} DATE(CONVERT_TZ(due_date, '+00:00', '+05:30')) < ? AND status NOT IN ('completed', 'cancelled')`).get(...params, today) as any).c;
     return { total, pending: statusMap.pending || 0, inProgress: statusMap.in_progress || 0, completed: statusMap.completed || 0, overdue };
   }
 
@@ -271,7 +271,7 @@ export class TasksService {
         COUNT(t.id) as total_tasks,
         SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) as completed,
         SUM(CASE WHEN t.status = 'in_progress' THEN 1 ELSE 0 END) as in_progress,
-        SUM(CASE WHEN t.status NOT IN ('completed','cancelled') AND t.due_date < CONCAT(?, ' 00:00:00') THEN 1 ELSE 0 END) as overdue,
+        SUM(CASE WHEN t.status NOT IN ('completed','cancelled') AND DATE(CONVERT_TZ(t.due_date, '+00:00', '+05:30')) < ? THEN 1 ELSE 0 END) as overdue,
         ROUND(AVG(t.progress_percent), 0) as avg_progress
       FROM users u
       JOIN task_assignments ta ON ta.user_id = u.id

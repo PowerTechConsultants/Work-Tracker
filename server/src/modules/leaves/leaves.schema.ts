@@ -2,8 +2,8 @@ import { z } from 'zod';
 
 export const createLeaveSchema = z.object({
   type: z.enum(['casual', 'sick', 'proposal']),
-  startDate: z.string().trim().datetime('Invalid start date format'),
-  endDate: z.string().trim().datetime('Invalid end date format'),
+  startDate: z.string().trim().min(1, 'Start date is required').refine((val) => !isNaN(Date.parse(val)), 'Invalid start date format'),
+  endDate: z.string().trim().min(1, 'End date is required').refine((val) => !isNaN(Date.parse(val)), 'Invalid end date format'),
   reason: z.string().trim().min(1, 'Reason is required').max(2000, 'Reason too long').optional(),
 }).refine((data) => {
   const start = new Date(data.startDate);

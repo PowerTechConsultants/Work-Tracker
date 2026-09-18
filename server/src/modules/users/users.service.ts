@@ -8,6 +8,14 @@ import { getPasswordPolicy, validatePassword } from '../../lib/password-policy';
 
 const SALT_ROUNDS = 12;
 
+function toSQLDate(v: unknown): string | null {
+  if (!v) return null;
+  const s = String(v);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  if (s.includes('T')) return s.slice(0, 10);
+  return s;
+}
+
 function mapUser(u: any) {
   return {
     id: u.id, employeeId: u.employee_id, firstName: u.first_name, lastName: u.last_name,
@@ -65,14 +73,14 @@ export class UsersService {
 
     // Wrap employee ID generation + email check + INSERT in a single transaction
     // to prevent race conditions on nextEmployeeId.
-    const employeeId = await db.transaction(async () => {
+    await db.transaction(async () => {
       const empId = await nextEmployeeId();
 
       const existing = await db.prepare('SELECT id FROM users WHERE email = ?').get(input.email);
       if (existing) throw new AppError(409, 'Email already exists');
 
       await db.prepare(`INSERT INTO users (id, employee_id, first_name, last_name, email, password_hash, role, phone_number, department_id, designation, joining_date, dob, gender, father_name, nationality, qualification, address_street, address_city, address_state, address_pincode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(id, empId, input.firstName, input.lastName, input.email, passwordHash, input.role, input.phoneNumber ?? null, input.departmentId ?? null, input.designation ?? null, input.joiningDate ?? null, input.dob, input.gender, input.fatherName, input.nationality, input.qualification, input.addressStreet, input.addressCity, input.addressState, input.addressPincode);
+        .run(id, empId, input.firstName, input.lastName, input.email, passwordHash, input.role, input.phoneNumber ?? null, input.departmentId ?? null, input.designation ?? null, toSQLDate(input.joiningDate), toSQLDate(input.dob), input.gender, input.fatherName, input.nationality, input.qualification, input.addressStreet, input.addressCity, input.addressState, input.addressPincode);
 
       return empId;
     })();
@@ -108,7 +116,7 @@ export class UsersService {
       if (v === undefined || !allowedFields.includes(k)) continue;
       const col = k.replace(/([A-Z])/g, '_$1').toLowerCase();
       sets.push(`${col} = ?`);
-      params.push(v);
+      params.push((k === 'joiningDate' || k === 'dob') ? toSQLDate(v) : v);
     }
     params.push(id);
     await db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`).run(...params);

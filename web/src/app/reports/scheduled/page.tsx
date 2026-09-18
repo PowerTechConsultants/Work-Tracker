@@ -60,6 +60,7 @@ export default function ScheduledReportsPage() {
   const { data: usersData } = useQuery({
     queryKey: ['usersListForSchedules'],
     queryFn: async () => (await api.get('/users?limit=100')).data,
+    retry: false,
     enabled: !loading && !!user,
   });
 

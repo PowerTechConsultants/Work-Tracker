@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { apiEndpoints } from '@/lib/api-endpoints';
 import { toast } from 'sonner';
 import { Upload, X, File, Image, FileText, Archive, FileCode } from 'lucide-react';
@@ -58,8 +58,13 @@ function formatFileSize(bytes: number) {
 }
 
 function BlobImage({ file }: { file: File }) {
-  const url = useMemo(() => URL.createObjectURL(file), [file]);
-  useEffect(() => { return () => URL.revokeObjectURL(url); }, [url]);
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    const u = URL.createObjectURL(file);
+    setUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [file]);
+  if (!url) return <div className="h-10 w-10 rounded-lg bg-slate-700 flex items-center justify-center" />;
   return <img src={url} alt={file.name} className="h-10 w-10 rounded-lg object-cover" />;
 }
 

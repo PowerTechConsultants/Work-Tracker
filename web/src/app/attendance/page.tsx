@@ -5,9 +5,9 @@ import { useAuth } from '@/context/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, getApiError } from '@/lib/api';
 import { listenOnSocket } from '@/lib/socket';
-import { captureBestLocation } from '@/lib/location';
+import { captureLocation, getLocationErrorMessage } from '@/lib/location';
 import { useNow } from '@/lib/useNow';
-import { formatDate, statusColor, dayTypeLabel } from '@/lib/utils';
+import { formatDate, statusColor, dayTypeLabel, DAY_HOURS, parseServerTime, formatISTTime } from '@/lib/utils';
 import { useState, useEffect, useMemo, useCallback, Fragment } from 'react';
 import { LogIn, LogOut, Play, Loader2, Clock, Coffee, Download, History, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
 import dynamic from 'next/dynamic';
@@ -22,7 +22,7 @@ const ExportDialog = dynamic(() => import('@/components/ExportDialog'), { ssr: f
 
 function formatExactTime(dateString: string | null): string {
   if (!dateString) return '-';
-  return new Date(dateString).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return formatISTTime(dateString);
 }
 
 function formatDuration(hours: number | null): string {
@@ -38,12 +38,13 @@ function formatDuration(hours: number | null): string {
 }
 
 function formatMinutes(minutes: number): string {
-  if (minutes <= 0) return '0m';
-  const h = Math.floor(minutes / 60);
-  const m = Math.round(minutes % 60);
-  if (h === 0) return `${m}m`;
-  if (m === 0) return `${h}h`;
-  return `${h}h ${m}m`;
+  const m = Number(minutes) || 0;
+  if (m <= 0) return '0m';
+  const h = Math.floor(m / 60);
+  const min = Math.round(m % 60);
+  if (h === 0) return `${Math.round(m)}m`;
+  if (min === 0) return `${h}h`;
+  return `${h}h ${min}m`;
 }
 
 function getISTToday(now: Date): string {
@@ -54,11 +55,13 @@ function getDisplayWorkingHours(rec: any, now: Date): number | null {
   if (!rec || !rec.login_time) return rec?.working_hours ?? null;
   if (rec.logout_time) return rec.working_hours;
   if (rec.date && rec.date !== getISTToday(now)) return null;
-  const loginMs = new Date(rec.login_time).getTime();
-  const elapsedHours = (now.getTime() - loginMs) / 3600000;
-  let pauseMinutes = rec.pause_minutes ?? 0;
+  const login = parseServerTime(rec.login_time);
+  if (!login) return rec?.working_hours ?? null;
+  const elapsedHours = (now.getTime() - login.getTime()) / 3600000;
+  let pauseMinutes = Number(rec.pause_minutes ?? 0) || 0;
   if (rec.pause_start_time && !rec.pause_end_time) {
-    pauseMinutes += (now.getTime() - new Date(rec.pause_start_time).getTime()) / 60000;
+    const pauseStart = parseServerTime(rec.pause_start_time);
+    if (pauseStart) pauseMinutes += (now.getTime() - pauseStart.getTime()) / 60000;
   }
   const pauseHours = pauseMinutes / 60;
   return Math.max(0, Math.round((elapsedHours - pauseHours) * 100) / 100);
@@ -67,8 +70,8 @@ function getDisplayWorkingHours(rec: any, now: Date): number | null {
 function formatOvertime(hours: number | null | undefined): string {
   if (hours === null || hours === undefined || hours <= 0) return '-';
   const totalMinutes = Math.round(hours * 60);
-  const days = Math.floor(totalMinutes / 480);
-  const rem = totalMinutes - days * 480;
+  const days = Math.floor(totalMinutes / (DAY_HOURS * 60));
+  const rem = totalMinutes - days * (DAY_HOURS * 60);
   const h = Math.floor(rem / 60);
   const m = rem % 60;
   let s = '+';
@@ -82,8 +85,8 @@ function formatOvertime(hours: number | null | undefined): string {
 function formatHoursDays(totalHours: number): string {
   const sign = totalHours < 0 ? '-' : '';
   const abs = Math.abs(totalHours);
-  const days = Math.floor(abs / 8);
-  const rem = abs - days * 8;
+  const days = Math.floor(abs / DAY_HOURS);
+  const rem = abs - days * DAY_HOURS;
   const h = Math.floor(rem);
   const m = Math.round((rem - h) * 60);
   let s = sign;
@@ -98,7 +101,7 @@ function mapLink(lat: number, lng: number): string {
 }
 
 function LocationCell({ latitude, longitude }: { latitude?: number | null; longitude?: number | null }) {
-  if (latitude === undefined || latitude === null || longitude === undefined || longitude === null) {
+  if (latitude === undefined || latitude === null || longitude === undefined || longitude === null || typeof latitude !== 'number' || typeof longitude !== 'number') {
     return <span className="text-rose-400/80">No location</span>;
   }
   return (
@@ -152,13 +155,14 @@ export default function AttendancePage() {
     });
   }, [qc]);
 
-  const now = useNow(30000);
+  const now = useNow(1000);
   const [monthYear, setMonthYear] = useState({ month: now.getMonth() + 1, year: now.getFullYear() });
   const [historyUser, setHistoryUser] = useState<any>(null);
   const [historyMonth, setHistoryMonth] = useState({ month: now.getMonth() + 1, year: now.getFullYear() });
   const [historyDateRange, setHistoryDateRange] = useState<{ start: string; end: string } | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [rowEvents, setRowEvents] = useState<Record<string, any[]>>({});
+  const [pendingPause, setPendingPause] = useState<'on_break' | 'present' | null>(null);
 
   const toggleRowExpand = useCallback((recordId: string) => {
     const isExpanding = !expandedRows.has(recordId);
@@ -180,6 +184,8 @@ export default function AttendancePage() {
     refetchInterval: 60000,
     enabled: !loading && !!user,
   });
+
+  const displayStatus = pendingPause ?? today?.status;
 
   const { data: todayEvents } = useQuery({
     queryKey: ['todayEvents', today?.id],
@@ -234,7 +240,9 @@ export default function AttendancePage() {
       const first = events[0];
       for (let idx = 0; idx < pauses.length; idx++) {
         const p = pauses[idx];
-        const durationMs = p.end ? new Date(p.end).getTime() - new Date(p.start).getTime() : null;
+        const start = parseServerTime(p.start);
+        const end = parseServerTime(p.end);
+        const durationMs = start && end ? end.getTime() - start.getTime() : null;
         const durationMin = durationMs !== null ? Math.round(durationMs / 60000) : null;
         rows.push({
           employee_name: `${first.first_name} ${first.last_name}`,
@@ -341,6 +349,7 @@ export default function AttendancePage() {
   const [attError, setAttError] = useState('');
   const [gettingLocation, setGettingLocation] = useState(false);
   const [locationProgress, setLocationProgress] = useState<number | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteText, setDeleteText] = useState('');
   const [deleteMsg, setDeleteMsg] = useState('');
@@ -401,10 +410,10 @@ export default function AttendancePage() {
   const checkOut = useMutation({
     retry: 0,
     mutationFn: async (loc?: { latitude?: number; longitude?: number; accuracy?: number; locationCapturedAt?: string } | null) => (await api.post('/attendance/check-out', loc ?? {})).data,
-    onMutate: async () => {
+    onMutate: async (loc) => {
       await qc.cancelQueries({ queryKey: ['todayAtt'] });
       const prev = qc.getQueryData(['todayAtt']);
-      qc.setQueryData(['todayAtt'], todayUpdater('work_end', { logout_time: now.toISOString(), working_hours: getDisplayWorkingHours(prev, now) }));
+      qc.setQueryData(['todayAtt'], todayUpdater('work_end', { logout_time: now.toISOString(), working_hours: getDisplayWorkingHours(prev, now), latitude: loc?.latitude, longitude: loc?.longitude, location_accuracy: loc?.accuracy, location_captured_at: loc?.locationCapturedAt }));
       return { prev };
     },
     onError: (e: any, _v, ctx) => {
@@ -417,9 +426,18 @@ export default function AttendancePage() {
   const handleCheckOut = async () => {
     setGettingLocation(true);
     setLocationProgress(null);
+    setLocationError(null);
     try {
-      const loc = await captureBestLocation({ onProgress: setLocationProgress });
-      checkOut.mutate(loc);
+      const result = await captureLocation({ onProgress: setLocationProgress });
+      const loc = (result as any)?.location !== undefined ? (result as any).location : (result as any);
+      const err = (result as any)?.error ?? null;
+      if (!loc) {
+        setLocationError(`${err ? getLocationErrorMessage(err) : 'Location capture failed.'} Check-out will proceed without location.`);
+      }
+      checkOut.mutate(loc ?? null);
+    } catch (e) {
+      setLocationError(`${getLocationErrorMessage(e)} Check-out will proceed without location.`);
+      checkOut.mutate(null);
     } finally {
       setGettingLocation(false);
       setLocationProgress(null);
@@ -429,9 +447,18 @@ export default function AttendancePage() {
   const handleCheckIn = async () => {
     setGettingLocation(true);
     setLocationProgress(null);
+    setLocationError(null);
     try {
-      const loc = await captureBestLocation({ onProgress: setLocationProgress });
-      checkIn.mutate(loc);
+      const result = await captureLocation({ onProgress: setLocationProgress });
+      const loc = (result as any)?.location !== undefined ? (result as any).location : (result as any);
+      const err = (result as any)?.error ?? null;
+      if (!loc) {
+        setLocationError(`${err ? getLocationErrorMessage(err) : 'Location capture failed.'} Check-in will proceed without location.`);
+      }
+      checkIn.mutate(loc ?? null);
+    } catch (e) {
+      setLocationError(`${getLocationErrorMessage(e)} Check-in will proceed without location.`);
+      checkIn.mutate(null);
     } finally {
       setGettingLocation(false);
       setLocationProgress(null);
@@ -471,12 +498,18 @@ export default function AttendancePage() {
   });
 
   const handleStartPause = () => {
-    startPause.mutate(undefined);
+    setPendingPause('on_break');
+    startPause.mutate(undefined, { onError: () => setPendingPause(null) });
   };
 
   const handleEndPause = () => {
-    endPause.mutate(undefined);
+    setPendingPause('present');
+    endPause.mutate(undefined, { onError: () => setPendingPause(null) });
   };
+
+  useEffect(() => {
+    if (pendingPause && today?.status === pendingPause) setPendingPause(null);
+  }, [pendingPause, today?.status]);
 
   return (
     <DashboardLayout>
@@ -560,9 +593,9 @@ export default function AttendancePage() {
             </div>
             {/* Action Buttons */}
             <div className="flex gap-2 flex-wrap">
-              {!today.logout_time && today.status === 'present' && (
+              {!today.logout_time && displayStatus === 'present' && (
                 <>
-                  <button onClick={() => handleStartPause()} disabled={startPause.isPending || gettingLocation}
+                  <button onClick={() => handleStartPause()} disabled={startPause.isPending || endPause.isPending || gettingLocation}
                     className="flex items-center gap-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 text-sm font-semibold transition disabled:opacity-50">
                     {startPause.isPending || gettingLocation ? <Loader2 className="h-4 w-4 animate-spin" /> : <Coffee className="h-4 w-4" />}{gettingLocation ? (locationProgress !== null ? `Improving accuracy… ${locationProgress}m` : 'Getting location…') : 'Pause'}
                   </button>
@@ -572,8 +605,11 @@ export default function AttendancePage() {
                   </button>
                 </>
               )}
-              {!today.logout_time && today.status === 'on_break' && (
-                <button onClick={() => handleEndPause()} disabled={endPause.isPending || gettingLocation}
+              {locationError && !today.logout_time && (
+                <p className="w-full mt-1 text-xs text-amber-400/80">{locationError}</p>
+              )}
+              {!today.logout_time && displayStatus === 'on_break' && (
+                <button onClick={() => handleEndPause()} disabled={endPause.isPending || startPause.isPending || gettingLocation}
                   className="flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 text-sm font-semibold transition disabled:opacity-50">
                   {endPause.isPending || gettingLocation ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}{gettingLocation ? (locationProgress !== null ? `Improving accuracy… ${locationProgress}m` : 'Getting location…') : 'Resume'}
                 </button>
@@ -618,10 +654,15 @@ export default function AttendancePage() {
         )}
 
         {!todayLoading && (!today || (!today.logout_time && ['leave', 'holiday', 'absent'].includes(today.status))) && (
-          <button onClick={handleCheckIn} disabled={checkIn.isPending || gettingLocation}
-            className="flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 text-sm font-semibold transition disabled:opacity-50">
-            {(checkIn.isPending || gettingLocation) ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}{gettingLocation ? (locationProgress !== null ? `Improving accuracy… ${locationProgress}m` : 'Getting location…') : 'Check In'}
-          </button>
+          <div>
+            <button onClick={handleCheckIn} disabled={checkIn.isPending || gettingLocation}
+              className="flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 text-sm font-semibold transition disabled:opacity-50">
+              {(checkIn.isPending || gettingLocation) ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}{gettingLocation ? (locationProgress !== null ? `Improving accuracy… ${locationProgress}m` : 'Getting location…') : 'Check In'}
+            </button>
+            {locationError && (
+              <p className="mt-2 text-xs text-amber-400/80">{locationError}</p>
+            )}
+          </div>
         )}
 
         {/* Today's Overview — Admin/HR only */}
@@ -884,7 +925,9 @@ export default function AttendancePage() {
                                       </thead>
                                       <tbody>
                                         {pausePairs.map((p, idx) => {
-                                          const durMs = p.end ? new Date(p.end).getTime() - new Date(p.start).getTime() : null;
+                                          const s = parseServerTime(p.start);
+                                          const e = parseServerTime(p.end);
+                                          const durMs = s && e ? e.getTime() - s.getTime() : null;
                                           const durMin = durMs !== null ? Math.round(durMs / 60000) : null;
                                           return (
                                             <tr key={idx} className="text-slate-300">

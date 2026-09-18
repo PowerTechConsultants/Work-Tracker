@@ -23,7 +23,7 @@ router.use(requireRole('director', 'hr'));
 router.post('/', validate(createHolidaySchema), async (req: Request, res: Response, next) => {
   try {
     const holiday = await HolidaysService.create(req.user!.sub, req.body);
-    cache.delByPrefix('/api/v1/holidays');
+    cache.delContaining('/api/v1/holidays');
     res.status(201).json(holiday);
   } catch (err) { next(err); }
 });
@@ -31,7 +31,7 @@ router.post('/', validate(createHolidaySchema), async (req: Request, res: Respon
 router.delete('/:id', requireRole('director'), requireUuid('id'), validate(deleteHolidaySchema), async (req: Request, res: Response, next) => {
   try {
     const result = await HolidaysService.delete(req.params.id!, req.body, req.user!.sub);
-    cache.delByPrefix('/api/v1/holidays');
+    cache.delContaining('/api/v1/holidays');
     res.json(result);
   } catch (err) { next(err); }
 });

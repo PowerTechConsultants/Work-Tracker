@@ -6,6 +6,7 @@ export const apiEndpoints = {
     markRead: (id: string) => api.post(`/notifications/${id}/read`),
     markAllRead: () => api.post('/notifications/read-all'),
     delete: (id: string) => api.delete(`/notifications/${id}`),
+    deleteAll: () => api.delete('/notifications/all'),
     stats: () => api.get('/notifications/stats'),
   },
   files: {

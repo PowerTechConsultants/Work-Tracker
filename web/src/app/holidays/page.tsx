@@ -40,6 +40,7 @@ export default function HolidaysPage() {
     queryKey: ['usersList'],
     queryFn: async () => (await api.get('/users?limit=200')).data,
     enabled: !loading && !!user && !form.allUsers,
+    retry: false,
   });
 
   const createHoliday = useMutation({

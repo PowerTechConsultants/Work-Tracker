@@ -3,12 +3,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Search, Download, ShieldAlert, UserPlus, FileBadge, FileText, Mail, Phone, MapPin } from 'lucide-react';
+import { Search, Download, ShieldAlert, UserPlus, Pencil, FileBadge, FileText, Mail, Phone, MapPin } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import Modal from '@/components/Modal';
 import Badge from '@/components/Badge';
 import ResponsiveTable, { Column } from '@/components/ResponsiveTable';
 import IssueDocumentModal from '@/components/IssueDocumentModal';
+import EmployeeEditModal from '@/components/EmployeeEditModal';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
 import { listenOnSocket } from '@/lib/socket';
@@ -25,13 +26,15 @@ export default function EmployeeDatabasePage() {
   const [deptFilter, setDeptFilter] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showIssueType, setShowIssueType] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
   const [issueType, setIssueType] = useState<DocumentDocType>('appointment_letter');
   const [issueDoc, setIssueDoc] = useState<DocumentRequest | null>(null);
 
   const usersQuery = useQuery({
     queryKey: ['empdb-users'],
-    queryFn: async () => (await api.get('/users')).data as { users: User[] },
+    queryFn: async () => (await api.get('/users', { params: { limit: 100 } })).data as { users: User[] },
     enabled: !loading && !!user && isHrAdmin,
+    retry: false,
   });
 
   const deptsQuery = useQuery({
@@ -283,6 +286,9 @@ export default function EmployeeDatabasePage() {
                       </div>
                     </div>
                   </div>
+                  <button onClick={() => setShowEdit(true)} className="flex items-center gap-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-4 py-2.5 text-sm font-medium transition flex-shrink-0">
+                    <Pencil className="h-4 w-4" />Edit
+                  </button>
                   <button onClick={() => setShowIssueType(true)} className="flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white px-4 py-2.5 text-sm font-semibold transition flex-shrink-0">
                     <UserPlus className="h-4 w-4" />Issue Document
                   </button>
@@ -360,6 +366,8 @@ export default function EmployeeDatabasePage() {
         </Modal>
 
         {issueDoc && <IssueDocumentModal doc={issueDoc} onClose={() => setIssueDoc(null)} />}
+
+        <EmployeeEditModal open={showEdit} user={selected} departments={departments} onClose={() => setShowEdit(false)} />
       </div>
     </DashboardLayout>
   );

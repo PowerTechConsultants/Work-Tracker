@@ -30,6 +30,13 @@ router.post('/:id/read', requireUuid('id'), async (req: Request, res: Response, 
   } catch (err) { next(err); }
 });
 
+router.delete('/all', async (req: Request, res: Response, next) => {
+  try {
+    const result = await NotificationsService.deleteAll(req.user!.sub);
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
 router.delete('/:id', requireUuid('id'), async (req: Request, res: Response, next) => {
   try {
     const result = await NotificationsService.delete(req.params.id!, req.user!.sub);

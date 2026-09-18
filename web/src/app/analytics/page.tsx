@@ -105,7 +105,7 @@ export default function AnalyticsPage() {
 
   const { data: leaderboardData } = useQuery({
     queryKey: ['employeeProductivity', leaderboardDept],
-    queryFn: async () => (await analyticsApi.employeeProductivity(leaderboardDept ? { department: leaderboardDept } : undefined)).data,
+    queryFn: async () => (await analyticsApi.employeeProductivity(leaderboardDept ? { departmentId: leaderboardDept } : undefined)).data,
     enabled: !loading && !!user,
   });
 
@@ -244,7 +244,7 @@ export default function AnalyticsPage() {
               >
                 <option value="">All Departments</option>
                 {deptPerfData?.departments?.map((d: any) => (
-                  <option key={d.department} value={d.department}>{d.department}</option>
+                  <option key={d.id ?? d.name} value={d.id ?? ''}>{d.name}</option>
                 ))}
               </select>
             </div>

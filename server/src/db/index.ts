@@ -1,3 +1,5 @@
+import dotenv from 'dotenv';
+dotenv.config();
 import { randomUUID } from 'crypto';
 import path from 'path';
 import fs from 'fs';
@@ -10,7 +12,7 @@ const url = process.env.DATABASE_URL;
 let host = process.env.MYSQL_HOST || 'localhost';
 let port = Number(process.env.MYSQL_PORT || '3306');
 let user = process.env.MYSQL_USER || 'root';
-let password = process.env.MYSQL_PASSWORD || '0000';
+let password = process.env.MYSQL_PASSWORD || '';
 let database = process.env.MYSQL_DATABASE || 'hr';
 if (url) {
   try {
@@ -22,22 +24,44 @@ if (url) {
     database = u.pathname.replace(/^\//, '') || database;
   } catch (e) { console.error('[DB] URL parse error:', e); }
 }
-
-const pool = mysql.createPool({ host, port, user, password, database, waitForConnections: true, connectionLimit: 10, queueLimit: 50, enableKeepAlive: true, timezone: '+00:00', connectTimeout: 10000, dateStrings: true });
-console.log(`[DB] MySQL pool: ${host}:${port}/${database}`);
-
-try {
-  const conn = await pool.getConnection();
-  try {
-    await conn.ping();
-    console.log('[DB] MySQL connected');
-  } finally {
-    conn.release();
-  }
-} catch (e: any) {
-  console.error('[DB] MySQL connection failed:', e.message);
+if (process.env.NODE_ENV === 'production' && !password && !url) {
+  console.error('[DB] FATAL: MYSQL_PASSWORD (or DATABASE_URL) is required in production');
   process.exit(1);
 }
+
+const sslEnabled = String(process.env.MYSQL_SSL || '').toLowerCase() === 'true';
+const pool = mysql.createPool({
+  host, port, user, password, database,
+  waitForConnections: true, connectionLimit: 10, queueLimit: 50,
+  enableKeepAlive: true, timezone: '+00:00', connectTimeout: 10000, dateStrings: true,
+  charset: 'utf8mb4',
+  ...(sslEnabled ? { ssl: { rejectUnauthorized: true } } : {}),
+} as any);
+console.log(`[DB] MySQL pool: ${host}:${port}/${database} ssl=${sslEnabled} charset=utf8mb4`);
+
+// Retry with backoff for Hostinger transient DNS/cold-start (3 attempts)
+let _dbConnected = false;
+for (let attempt = 1; attempt <= 3; attempt++) {
+  try {
+    const conn = await pool.getConnection();
+    try {
+      await conn.ping();
+      console.log('[DB] MySQL connected');
+      _dbConnected = true;
+    } finally {
+      conn.release();
+    }
+    break;
+  } catch (e: any) {
+    console.error(`[DB] MySQL connection failed (attempt ${attempt}/3):`, e.message);
+    if (attempt === 3) {
+      console.error('[DB] All retries exhausted — exiting');
+      process.exit(1);
+    }
+    await new Promise((r) => setTimeout(r, attempt * 2000));
+  }
+}
+if (!_dbConnected) process.exit(1);
 
 function translateSql(sql: string): string {
   return sql
@@ -92,12 +116,12 @@ const db = {
     if (sql.includes('PRAGMA table_info')) {
       const table = sql.match(/PRAGMA table_info\(([^)]+)\)/)?.[1]?.replace(/['"]/g, '');
       return {
-        all: async (...params: any[]): Promise<any[]> => {
+        all: async (..._params: any[]): Promise<any[]> => {
           const conn = txnStore.getStore();
           const [rows] = await (conn ?? pool).query(`SELECT ordinal_position as cid, column_name as name, column_type as type, CASE WHEN is_nullable = 'NO' THEN 1 ELSE 0 END as notnull, column_default as dflt_value, CASE WHEN column_key = 'PRI' THEN 1 ELSE 0 END as pk FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ordinal_position`, [table]);
           return rows as any[];
         },
-        get: async (...params: any[]): Promise<any> => {
+        get: async (..._params: any[]): Promise<any> => {
           const conn = txnStore.getStore();
           const [rows] = await (conn ?? pool).query(`SELECT ordinal_position as cid, column_name as name, column_type as type, CASE WHEN is_nullable = 'NO' THEN 1 ELSE 0 END as notnull, column_default as dflt_value, CASE WHEN column_key = 'PRI' THEN 1 ELSE 0 END as pk FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ordinal_position`, [table]);
           return (rows as any[])[0];
@@ -580,6 +604,13 @@ const migrations: Array<{ version: number; name: string; up: () => Promise<void>
         );
         CREATE INDEX IF NOT EXISTS idx_monthly_overtime_user ON monthly_overtime(user_id, year, month);
       `);
+    },
+  },
+  {
+    version: 18,
+    name: 'holidays-unique-date-constraint',
+    up: async () => {
+      await db.exec(`ALTER TABLE holidays ADD UNIQUE KEY uk_holidays_date (date)`);
     },
   },
 ];

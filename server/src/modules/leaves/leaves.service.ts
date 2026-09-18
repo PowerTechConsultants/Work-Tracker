@@ -31,7 +31,7 @@ async function entitlementForYear(userId: string, year: number): Promise<{ sick:
 
 function invalidateAnalyticsCache() {
   try {
-    cache.delByPrefix('/api/v1/analytics/');
+    cache.delContaining('/api/v1/analytics/');
   } catch (e) {
     console.error('[Leaves] Analytics cache invalidation failed:', e);
   }
@@ -192,25 +192,6 @@ async function computeRequestExtra(userId: string, year: number, requestedDays: 
   return Math.max(0, requestedDays - available);
 }
 
-// Whether the user has any leave activity in years before the given year.
-async function hasLeaveBefore(userId: string, year: number): Promise<boolean> {
-  const rows = await db.prepare("SELECT start_date, leave_year FROM leaves WHERE user_id = ? AND status = 'approved'").all(userId) as any[];
-  return rows.some(function (r) { return (r.leave_year ?? yearOf(r.start_date)) < year; });
-}
-
-async function proposalUsedInYear(userId: string, year: number): Promise<number> {
-  const start = `${year}-01-01`;
-  const end = `${year}-12-31`;
-  const rows = await db.prepare("SELECT start_date, end_date FROM leaves WHERE user_id = ? AND type = 'proposal' AND status = 'approved' AND start_date <= ? AND end_date >= ?").all(userId, end, start) as any[];
-  let total = 0;
-  for (const r of rows) {
-    const clampStart = r.start_date > start ? r.start_date : start;
-    const clampEnd = r.end_date < end ? r.end_date : end;
-    total += await countWorkingDays(userId, clampStart, clampEnd);
-  }
-  return total;
-}
-
 export class LeavesService {
   static async create(userId: string, input: any, role?: string) {
     const startDate = input.startDate.split('T')[0]!;
@@ -323,7 +304,6 @@ export class LeavesService {
 
   static async getBalance(userId: string, year?: number) {
     const currentYear = year ?? parseInt(getISTDate().slice(0, 4), 10);
-    const prevYear = currentYear - 1;
     const start = `${currentYear}-01-01`;
     const end = `${currentYear}-12-31`;
 
@@ -394,7 +374,7 @@ export class LeavesService {
     return requestedType;
   }
 
-  static async review(id: string, reviewedById: string, status: string, comments?: string, role?: string) {
+  static async review(id: string, reviewedById: string, status: string, comments?: string, _role?: string) {
     const leave = await db.prepare('SELECT id, user_id, type, start_date, end_date, reason, status FROM leaves WHERE id = ?').get(id) as any;
     if (!leave) throw new AppError(404, 'Leave not found');
     if (leave.user_id === reviewedById) throw new AppError(403, 'Cannot review your own leave request');
@@ -453,11 +433,11 @@ export class LeavesService {
     const isOwner = leave.user_id === userId;
     const isAdmin = role === 'director' || role === 'hr';
 
-    // Employees can cancel their own pending leaves
+    // Allow self-cancel for owner (pending for employee, any for director/hr); admin can cancel other's approved
     if (!isAdmin && !isOwner) throw new AppError(403, 'Access denied');
     if (!isAdmin && isOwner && leave.status !== 'pending') throw new AppError(409, 'Employees can only cancel pending leaves');
     if (isAdmin && !isOwner && leave.status !== 'approved') throw new AppError(409, 'Only approved leaves can be cancelled by admin');
-    if (isAdmin && isOwner) throw new AppError(403, 'Cannot cancel your own leave — ask another admin');
+    // directors/hr can cancel own leaves (pending or approved) — no peer required for cancel
     if (leave.status === 'cancelled') throw new AppError(409, 'Leave already cancelled');
 
     const today = getISTDate();

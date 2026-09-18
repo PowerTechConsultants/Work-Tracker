@@ -317,7 +317,7 @@ export class AuthService {
     // Return a generic message and warn operators so the gap is visible.
     if (!mailEnabled) {
       if (config.nodeEnv === 'production') {
-        console.warn(`[RESET] Password reset requested for ${email} but SMTP is not configured. No reset token was issued.`);
+        console.warn('[RESET] Password reset requested but SMTP is not configured. No reset token was issued.');
         return { message: 'If the email exists, a reset token has been generated.' };
       }
       // In development, fall through and log the reset link to the console.

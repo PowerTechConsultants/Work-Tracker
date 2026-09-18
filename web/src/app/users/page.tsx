@@ -4,6 +4,7 @@ import DashboardLayout from '@/components/DashboardLayout';
 import { useAuth } from '@/context/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, getApiError } from '@/lib/api';
+import { apiEndpoints } from '@/lib/api-endpoints';
 import { statusColor, displayRole } from '@/lib/utils';
 import { useState, useEffect, useMemo } from 'react';
 import { Plus, Loader2, Search, Pencil, Trash2, Download } from 'lucide-react';
@@ -30,6 +31,14 @@ export default function UsersPage() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [showExport, setShowExport] = useState(false);
   const [error, setError] = useState('');
+
+  const { data: policyData } = useQuery({
+    queryKey: ['securityPolicy'],
+    queryFn: async () => { const res = await apiEndpoints.security.policy(); return res.data; },
+    enabled: !!user,
+    staleTime: 300000,
+  });
+  const policy = policyData?.policy ?? policyData ?? { minLength: 8, requireUppercase: true, requireLowercase: true, requireNumber: true, requireSpecial: false };
 
   const exportColumns: ExportColumn[] = [
     { id: 'employeeId', label: 'Employee ID' },
@@ -58,15 +67,17 @@ export default function UsersPage() {
     if (!form.email) errors.email = 'Email is required';
     else if (!/\S+@\S+\.\S+/.test(form.email)) errors.email = 'Invalid email format';
     if (!editId && !form.password) errors.password = 'Password is required';
-    else if (!editId && form.password && form.password.length < 8) errors.password = 'Password must be at least 8 characters';
-    else if (!editId && form.password && !/[A-Z]/.test(form.password)) errors.password = 'Password must contain at least one uppercase letter';
-    else if (!editId && form.password && !/[a-z]/.test(form.password)) errors.password = 'Password must contain at least one lowercase letter';
-    else if (!editId && form.password && !/[0-9]/.test(form.password)) errors.password = 'Password must contain at least one number';
+    else if (!editId && form.password && form.password.length < policy.minLength) errors.password = `Password must be at least ${policy.minLength} characters`;
+    else if (!editId && form.password && policy.requireUppercase && !/[A-Z]/.test(form.password)) errors.password = 'Password must contain at least one uppercase letter';
+    else if (!editId && form.password && policy.requireLowercase && !/[a-z]/.test(form.password)) errors.password = 'Password must contain at least one lowercase letter';
+    else if (!editId && form.password && policy.requireNumber && !/[0-9]/.test(form.password)) errors.password = 'Password must contain at least one number';
+    else if (!editId && form.password && policy.requireSpecial && !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(form.password)) errors.password = 'Password must contain at least one special character';
     if (!form.firstName) errors.firstName = 'First name is required';
     else if (!/^[a-zA-Z\s'-]+$/.test(form.firstName)) errors.firstName = 'First name contains invalid characters';
     if (!form.lastName) errors.lastName = 'Last name is required';
     else if (!/^[a-zA-Z\s'-]+$/.test(form.lastName)) errors.lastName = 'Last name contains invalid characters';
-    if (form.phoneNumber && !/^\+?[1-9]\d{1,14}$/.test(form.phoneNumber)) errors.phoneNumber = 'Invalid phone number format';
+    if (!form.phoneNumber) errors.phoneNumber = 'Phone number is required';
+    else if (!/^\+?[1-9]\d{1,14}$/.test(form.phoneNumber)) errors.phoneNumber = 'Invalid phone number format';
     if (!form.dob) errors.dob = 'DOB is required';
     else {
       const d = new Date(form.dob + 'T00:00:00Z');
@@ -112,6 +123,7 @@ export default function UsersPage() {
       </div>
     ) },
     { header: 'Email', key: 'email', render: (u: any) => <span className="text-slate-300 text-xs break-all">{u.email}</span> },
+    { header: 'Phone', key: 'phone', render: (u: any) => <span className="text-slate-300 text-xs">{u.phoneNumber || '—'}</span> },
     { header: 'Role', key: 'role', render: (u: any) => <span className="text-slate-300 text-sm">{displayRole(u.role)}</span> },
     { header: 'Status', key: 'status', render: (u: any) => <Badge className={statusColor(u.status)}>{u.status}</Badge> },
   ], []);
@@ -122,7 +134,7 @@ export default function UsersPage() {
       if (!editId) { payload.email = d.email; payload.password = d.password; }
       if (d.departmentId) payload.departmentId = d.departmentId;
       if (d.designation) payload.designation = d.designation;
-      if (d.phoneNumber) payload.phoneNumber = d.phoneNumber;
+      payload.phoneNumber = d.phoneNumber;
       return editId ? (await api.patch(`/users/${editId}`, payload)).data : (await api.post('/users', payload)).data;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['users'] }); setShowCreate(false); setEditId(null); setForm({ email: '', password: '', firstName: '', lastName: '', role: 'employee', departmentId: '', designation: '', phoneNumber: '', dob: '', gender: 'male' as 'male'|'female'|'other', fatherName: '', nationality: '', qualification: '', addressStreet: '', addressCity: '', addressState: '', addressPincode: '', joiningDate: '' }); setFormErrors({}); toast.success(editId ? 'User updated successfully' : 'User created successfully'); },
@@ -236,7 +248,7 @@ export default function UsersPage() {
               </div>
             )}
             <div>
-              <label className="block text-sm text-slate-300 mb-1">Phone Number</label>
+              <label className="block text-sm text-slate-300 mb-1">Phone Number *</label>
               <input type="tel" value={form.phoneNumber} onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })} className={`w-full rounded-xl border ${formErrors.phoneNumber ? 'border-rose-500' : 'border-slate-700'} bg-slate-800 px-4 py-2.5 text-sm text-white`} placeholder="+1234567890" />
               {formErrors.phoneNumber && <p className="text-xs text-rose-400 mt-1">{formErrors.phoneNumber}</p>}
             </div>

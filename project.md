@@ -15,9 +15,9 @@ Employee Work Tracker is a full-stack workforce management application designed 
 
 ## Database Schema
 
-SQLite with 17 tables:
+MySQL with 17 tables:
 
-- **users** — Employee records with roles (admin/hr/employee), status, login tracking, lockout
+- **users** — Employee records with roles (director/hr/employee), status, login tracking, lockout
 - **departments** — Department hierarchy with manager assignment
 - **team_members** — User-team membership (composite key: user_id + team_name)
 - **refresh_tokens** — JWT refresh token storage with revocation support
@@ -43,9 +43,9 @@ SQLite with 17 tables:
 
 ### Phase 1: Foundation
 - Project scaffolding with Express + Next.js
-- SQLite schema design with WAL mode
+- MySQL schema design with InnoDB
 - JWT authentication with httpOnly cookie rotation
-- RBAC middleware (admin/hr/employee)
+- RBAC middleware (director/hr/employee)
 - Rate limiting, CORS, Helmet security headers
 - Error handling middleware
 
@@ -91,7 +91,7 @@ SQLite with 17 tables:
 
 ### Phase 7: Testing & Polish
 - 60 backend tests across 6 suites (services, routes, crash scenarios)
-- All tests passing with shared SQLite test database
+- Frontend tests passing (17 tests in web/src/lib/utils.test.ts)
 - Frontend build clean (19 pages)
 - Dark theme responsive UI
 - Database backup functionality
@@ -100,8 +100,8 @@ SQLite with 17 tables:
 
 | Decision | Rationale |
 |----------|-----------|
-| SQLite over PostgreSQL | Single file, no DB server, sufficient for 30-35 employees |
-| better-sqlite3 (raw SQL) | No ORM overhead, full control over queries |
+| MySQL over PostgreSQL | Managed database, sufficient for 30-35 employees |
+| mysql2 (raw SQL) | No ORM overhead, full control over queries |
 | WAL journal mode | Concurrent reads with write queue |
 | IST timezone for attendance | Asia/Kolkata for all date calculations |
 | UTC timestamps for login/logout | Standardized audit trail |

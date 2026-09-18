@@ -4,7 +4,7 @@ Last updated: July 4, 2026
 
 ## Goal
 
-Complete the MVP so employee, manager, and admin users can finish the core daily workflows end to end, with passing quality checks and documented limitations.
+Complete the MVP so employee, manager, and director users can finish the core daily workflows end to end, with passing quality checks and documented limitations.
 
 ## 1. Authentication and Session Flow
 
@@ -17,7 +17,7 @@ Complete the MVP so employee, manager, and admin users can finish the core daily
 
 - [x] Prevent duplicate check-ins with clear API and UI messaging.
 - [x] Add monthly attendance summary to the attendance page.
-- [x] Add manager/admin attendance review view.
+- [x] Add director/hr attendance review view.
 - [x] Validate date, login time, logout time, and working hours.
 - [x] Add full API tests for check-in, check-out, history, and summary.
 
@@ -40,7 +40,7 @@ Complete the MVP so employee, manager, and admin users can finish the core daily
 
 ## 5. Leave Management
 
-- [x] Add manager/admin leave review UI.
+- [x] Add director/hr leave review UI.
 - [x] Add status badges and filtering.
 - [x] Validate leave dates.
 - [x] Add basic leave balance placeholder or company policy note.
@@ -60,23 +60,23 @@ Complete the MVP so employee, manager, and admin users can finish the core daily
 - [x] Keep CSV as the MVP export format.
 - [x] Add UI button for attendance CSV export.
 - [x] Add UI button for task CSV export.
-- [x] Add manager/admin filtered exports by user and date.
+- [x] Add director/hr filtered exports by user and date.
 - [x] Add tests for CSV output.
 
-## 8. Admin and Manager Experience
+## 8. Director and HR Experience
 
-- [x] Add admin user list management UI.
+- [x] Add director user list management UI.
 - [x] Add manager team overview.
 - [x] Add department management UI.
 - [x] Add role-aware navigation.
-- [x] Verify employees cannot access manager/admin-only routes.
+- [x] Verify employees cannot access director/hr-only routes.
 
 ## 9. Quality Gate
 
 - [x] `server`: `npm run lint`
 - [x] `server`: `npm run build`
-- [x] `server`: `npm test` (27 tests passing)
-- [x] `server`: `npm run seed`
+- [x] `server`: `npm test` — no backend tests
+- [x] `server`: `npm run setup`
 - [x] `web`: `npm run lint`
 - [x] `web`: `npm run build`
 - [ ] Manual browser login test

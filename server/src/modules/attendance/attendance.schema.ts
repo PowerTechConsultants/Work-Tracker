@@ -4,20 +4,22 @@ const attendanceStatuses = ['present', 'on_break', 'work_end', 'absent', 'leave'
 
 const checkInStatuses = ['present', 'remote'] as const;
 
+const dbDatetimeISO = z.string().trim().datetime().transform((v) => v.replace('T', ' ').replace(/\.\d{3}Z$/, ''));
+
 export const checkInSchema = z.object({
   status: z.enum(checkInStatuses).default('present'),
   notes: z.string().trim().optional(),
   latitude: z.number().min(-90).max(90).optional(),
   longitude: z.number().min(-180).max(180).optional(),
   accuracy: z.number().min(0).optional(),
-  locationCapturedAt: z.string().trim().datetime().optional(),
+  locationCapturedAt: dbDatetimeISO.optional(),
 });
 
 export const locationOptionalSchema = z.object({
   latitude: z.number().min(-90).max(90).optional(),
   longitude: z.number().min(-180).max(180).optional(),
   accuracy: z.number().min(0).optional(),
-  locationCapturedAt: z.string().trim().datetime().optional(),
+  locationCapturedAt: dbDatetimeISO.optional(),
 });
 
 export const monthlyQuerySchema = z.object({
@@ -45,18 +47,18 @@ export const listAttendanceSchema = z.object({
 
 export const updateAttendanceSchema = z.object({
   status: z.enum(attendanceStatuses).optional(),
-  loginTime: z.string().trim().datetime().optional(),
-  logoutTime: z.string().trim().datetime().optional(),
+  loginTime: dbDatetimeISO.optional(),
+  logoutTime: dbDatetimeISO.optional(),
   workingHours: z.number().min(0).optional(),
   overtimeHours: z.number().min(0).optional(),
-  pauseStartTime: z.string().trim().datetime().optional(),
-  pauseEndTime: z.string().trim().datetime().optional(),
+  pauseStartTime: dbDatetimeISO.optional(),
+  pauseEndTime: dbDatetimeISO.optional(),
   pauseMinutes: z.number().min(0).optional(),
   notes: z.string().trim().optional(),
   latitude: z.number().min(-90).max(90).optional(),
   longitude: z.number().min(-180).max(180).optional(),
   accuracy: z.number().min(0).optional(),
-  locationCapturedAt: z.string().trim().datetime().optional(),
+  locationCapturedAt: dbDatetimeISO.optional(),
 });
 
 export const deleteAttendanceSchema = z.object({

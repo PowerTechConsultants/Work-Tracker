@@ -35,7 +35,7 @@ async function releaseLock(): Promise<void> {
 
 async function invalidateAnalyticsCache() {
   try {
-    await cache.delByPrefix('/api/v1/analytics/');
+    await cache.delContaining('/api/v1/analytics/');
   } catch (e) {
     console.error('[Auto-Absent] Analytics cache invalidation failed:', e);
   }
@@ -48,7 +48,6 @@ async function skipUsersForHoliday(date: string): Promise<string[]> {
   const holidayIds = holidays.map((h: any) => h.id);
   const placeholders = holidayIds.map(() => '?').join(',');
   const assignees = await db.prepare(`SELECT user_id FROM holiday_assignees WHERE holiday_id IN (${placeholders})`).all(...holidayIds) as any[];
-  const assignedUserIds = new Set(assignees.map((r: any) => r.user_id));
 
   let hasCompanyWide = false;
   for (const h of holidays) {

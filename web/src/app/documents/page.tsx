@@ -12,7 +12,7 @@ import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
 import { listenOnSocket } from '@/lib/socket';
 import { statusColor, formatDate } from '@/lib/utils';
-import { DOC_TYPES, downloadDocumentPdf, downloadDocumentDoc, DocumentDocType } from '@/lib/documentTemplates';
+import { DOC_TYPES, docTypeLabel, downloadDocumentPdf, downloadDocumentDoc, DocumentDocType } from '@/lib/documentTemplates';
 import IssueDocumentModal from '@/components/IssueDocumentModal';
 import type { DocumentRequest, DocumentsResponse, User } from '@/types/api';
 
@@ -47,6 +47,7 @@ export default function DocumentsPage() {
     queryKey: ['users-for-documents'],
     queryFn: async () => (await api.get('/users')).data as { users: User[] },
     enabled: !loading && !!user && isHrAdmin && showIssueNew,
+    retry: false,
   });
 
   useEffect(() => {
@@ -60,6 +61,27 @@ export default function DocumentsPage() {
 
   const documents = documentsQuery.data?.documents ?? [];
   const pendingCount = documentsQuery.data?.pendingCount ?? 0;
+
+  const pendingTypesByUser = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const d of documents) {
+      if (d.status === 'pending') {
+        if (!map.has(d.userId)) map.set(d.userId, new Set<string>());
+        map.get(d.userId)!.add(d.docType);
+      }
+    }
+    return map;
+  }, [documents]);
+
+  const myPendingTypes = useMemo(
+    () => pendingTypesByUser.get(user?.id ?? '') ?? new Set<string>(),
+    [pendingTypesByUser, user?.id],
+  );
+
+  const selectedPendingTypes = useMemo(
+    () => (newUserId ? pendingTypesByUser.get(newUserId) ?? new Set<string>() : new Set<string>()),
+    [newUserId, pendingTypesByUser],
+  );
 
   const openIssue = (doc: DocumentRequest) => {
     setIssueDoc(doc);
@@ -228,7 +250,7 @@ export default function DocumentsPage() {
                 </button>
               </>
             ) : (
-              <button onClick={() => setShowRequest(true)} className="flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white px-4 py-2.5 text-sm font-semibold transition">
+              <button onClick={() => { setShowRequest(true); setReqNote(''); const avail = DOC_TYPES.filter((t: any) => !myPendingTypes.has(t.value)); if (myPendingTypes.has(reqType) && avail.length > 0) setReqType(avail[0].value as DocumentDocType); }} className="flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white px-4 py-2.5 text-sm font-semibold transition">
                 <Plus className="h-4 w-4" />Request Document
               </button>
             )}
@@ -279,8 +301,18 @@ export default function DocumentsPage() {
                 <label className="block text-xs font-medium text-slate-400 mb-1.5">Document Type</label>
                 <select value={reqType} onChange={(e) => setReqType(e.target.value as DocumentDocType)}
                   className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:border-violet-500">
-                  {DOC_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  {DOC_TYPES.map((t) => {
+                    const isPend = myPendingTypes.has(t.value);
+                    return <option key={t.value} value={t.value} disabled={isPend}>{t.label}{isPend ? ' (pending)' : ''}</option>;
+                  })}
                 </select>
+                {myPendingTypes.size > 0 && (
+                  <p className="text-xs text-amber-400 mt-1.5">
+                    Already pending:{' '}
+                    <span className="text-amber-300">{[...myPendingTypes].map((t) => docTypeLabel(t as DocumentDocType)).join(', ')}</span>.
+                    Wait for them to be issued or cancel them before requesting again.
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-400 mb-1.5">Note (optional)</label>
@@ -291,7 +323,13 @@ export default function DocumentsPage() {
               <div className="flex justify-end gap-2 pt-2">
                 <button onClick={() => setShowRequest(false)} className="px-4 py-2.5 text-sm font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl transition">Cancel</button>
                 <button disabled={requestMutation.isPending}
-                  onClick={() => requestMutation.mutate({ docType: reqType, note: reqNote.trim() || undefined })}
+                  onClick={() => {
+                    if (myPendingTypes.has(reqType)) {
+                      toast.error('You already have a pending request for this document type');
+                      return;
+                    }
+                    requestMutation.mutate({ docType: reqType, note: reqNote.trim() || undefined });
+                  }}
                   className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-violet-600 hover:bg-violet-700 rounded-xl transition disabled:opacity-50">
                   <Send className="h-4 w-4" />{requestMutation.isPending ? 'Submitting...' : 'Submit Request'}
                 </button>
@@ -329,25 +367,49 @@ export default function DocumentsPage() {
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-slate-400 mb-1.5">Employee</label>
-                <select value={newUserId} onChange={(e) => setNewUserId(e.target.value)}
+                <select value={newUserId} onChange={(e) => {
+                  const uid = e.target.value;
+                  setNewUserId(uid);
+                  const p = pendingTypesByUser.get(uid);
+                  if (p && p.has(newDocType)) {
+                    const avail = DOC_TYPES.filter((t: any) => !(p?.has(t.value)));
+                    if (avail.length > 0) setNewDocType(avail[0].value as DocumentDocType);
+                  }
+                }}
                   className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:border-violet-500">
                   <option value="">Select employee...</option>
                   {(usersQuery.data?.users ?? []).map((u) => (
                     <option key={u.id} value={u.id}>{u.firstName} {u.lastName} ({u.employeeId})</option>
                   ))}
                 </select>
+                {newUserId && selectedPendingTypes.size > 0 && (
+                  <p className="text-xs text-amber-400 mt-1.5">
+                    Already pending for this employee:{' '}
+                    <span className="text-amber-300">{[...selectedPendingTypes].map((t) => docTypeLabel(t as DocumentDocType)).join(', ')}</span>.
+                    Issue or reject those before creating another.
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-400 mb-1.5">Document Type</label>
                 <select value={newDocType} onChange={(e) => setNewDocType(e.target.value as DocumentDocType)}
                   className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:border-violet-500">
-                  {DOC_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  {DOC_TYPES.map((t) => {
+                    const isPend = selectedPendingTypes.has(t.value);
+                    return <option key={t.value} value={t.value} disabled={isPend}>{t.label}{isPend ? ' (pending)' : ''}</option>;
+                  })}
                 </select>
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <button onClick={() => setShowIssueNew(false)} className="px-4 py-2.5 text-sm font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl transition">Cancel</button>
                 <button disabled={!newUserId || createForEmployeeMutation.isPending}
-                  onClick={() => createForEmployeeMutation.mutate({ docType: newDocType, userId: newUserId })}
+                  onClick={() => {
+                    if (selectedPendingTypes.has(newDocType)) {
+                      toast.error('A pending request for this document type already exists for the selected employee');
+                      return;
+                    }
+                    createForEmployeeMutation.mutate({ docType: newDocType, userId: newUserId });
+                  }}
                   className="px-4 py-2.5 text-sm font-semibold text-white bg-violet-600 hover:bg-violet-700 rounded-xl transition disabled:opacity-50">
                   {createForEmployeeMutation.isPending ? 'Creating...' : 'Continue to Fill'}
                 </button>

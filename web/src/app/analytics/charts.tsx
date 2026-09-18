@@ -110,12 +110,12 @@ export function DepartmentPerformanceChart({ data }: { data: any[] }) {
     <ResponsiveContainer width="100%" height={300}>
       <ComposedChart data={data}>
         <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-        <XAxis dataKey="department" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+        <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 11 }} />
         <YAxis yAxisId="left" tick={{ fill: '#94a3b8', fontSize: 11 }} />
         <YAxis yAxisId="right" orientation="right" tick={{ fill: '#94a3b8', fontSize: 11 }} domain={[0, 100]} />
         <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => `${v}%`} />
         <Legend wrapperStyle={{ fontSize: '11px', color: '#94a3b8' }} />
-        <Bar yAxisId="left" dataKey="attendanceRate" name="Attendance Rate" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+        <Bar yAxisId="left" dataKey="avgAttendanceRate" name="Attendance Rate" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
         <Line yAxisId="right" type="monotone" dataKey="taskCompletionRate" name="Task Completion" stroke="#10b981" strokeWidth={2} dot={{ r: 4 }} />
       </ComposedChart>
     </ResponsiveContainer>
@@ -146,8 +146,8 @@ export function EmployeeLeaderboardTable({ data }: { data: any[] }) {
           {data.map((row: any, i: number) => (
             <tr key={row.id ?? i} className="border-b border-slate-800 hover:bg-slate-800/50 transition">
               <td className="py-3 px-3 text-slate-300 font-mono text-xs">{i + 1}</td>
-              <td className="py-3 px-3 text-white font-medium">{row.name}</td>
-              <td className="py-3 px-3 text-slate-400">{row.department}</td>
+              <td className="py-3 px-3 text-white font-medium">{row.firstName} {row.lastName}</td>
+              <td className="py-3 px-3 text-slate-400">{row.departmentName}</td>
               <td className="py-3 px-3 text-white text-right">{row.tasksCompleted}</td>
               <td className={`py-3 px-3 text-right font-semibold ${efficiencyColor(row.efficiency)}`}>{row.efficiency}%</td>
               <td className="py-3 px-3 text-slate-300 text-right">{row.attendanceRate}%</td>
@@ -166,7 +166,11 @@ export function ManagerDashboardPanel({ data }: { data: any }) {
   const stats = [
     { label: 'Team Size', value: data.teamSize ?? 0, color: 'text-violet-400' },
     { label: 'Present Today', value: data.presentToday ?? 0, color: 'text-emerald-400' },
-    { label: 'Pending Approvals', value: data.pendingApprovals ?? 0, color: 'text-amber-400' },
+    {
+      label: 'Pending Approvals',
+      value: (data.pendingApprovals?.tasks ?? 0) + (data.pendingApprovals?.leaves ?? 0) + (data.pendingApprovals?.reports ?? 0),
+      color: 'text-amber-400',
+    },
     { label: 'Upcoming Deadlines', value: data.upcomingDeadlines ?? 0, color: 'text-rose-400' },
   ];
 

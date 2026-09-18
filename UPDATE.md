@@ -1,5 +1,9 @@
 # Employee Work Tracker - Project Status Update
 
+> **NOTE (2026-09):** The project has migrated from SQLite to MySQL 8.0. The database layer
+> now uses `mysql2` with raw SQL. Roles use `director` (not `admin`). The seed script is
+> now `npm run setup`. Historical entries below are preserved for reference.
+
 **Last Updated:** June 10, 2026  
 **Project Status:** In Development - Backend Verification Phase
 

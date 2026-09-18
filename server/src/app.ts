@@ -37,6 +37,7 @@ import systemRoutes from './modules/system/system.routes';
 import filesRoutes from './modules/files/files.routes';
 import reportTemplatesRoutes from './modules/report-templates/report-templates.routes';
 import scheduledReportsRoutes from './modules/scheduled-reports/scheduled-reports.routes';
+import securityRoutes from './modules/security/security.routes';
 
 // Clean up expired rate limit entries on startup
 RateLimitStore.resetExpired().catch(() => {});
@@ -79,9 +80,9 @@ export function createApp() {
     noSniff: true,
   }));
 
-  // Permissions-Policy header
+  // Permissions-Policy header — geolocation=(self) required for check-in
   app.use((_req, res, next) => {
-    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), interest-cohort=()');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(self), interest-cohort=()');
     next();
   });
   app.use(compressMiddleware());
@@ -187,6 +188,7 @@ export function createApp() {
   app.use(`${api}/files`, filesRoutes);
   app.use(`${api}/report-templates`, reportTemplatesRoutes);
   app.use(`${api}/scheduled-reports`, scheduledReportsRoutes);
+  app.use(`${api}/security`, securityRoutes);
 
   // API docs - protected in production, basic auth in dev
   if (config.nodeEnv === 'production') {

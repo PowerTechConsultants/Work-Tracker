@@ -104,6 +104,23 @@ export default function NotificationsPage() {
     }
   }, [confirmCtx, qc]);
 
+  const deleteAllNotifications = useCallback(async () => {
+    const ok = await confirmCtx.confirm({
+      title: 'Delete all notifications',
+      message: 'Are you sure you want to delete all notifications? This cannot be undone.',
+      variant: 'danger',
+      confirmText: 'Delete All',
+    });
+    if (!ok) return;
+    try {
+      await api.delete('/notifications/all');
+      qc.invalidateQueries({ queryKey: ['notifications'] });
+      toast.success('All notifications deleted');
+    } catch {
+      toast.error('Failed to delete notifications');
+    }
+  }, [confirmCtx, qc]);
+
   const handleClick = (n: Notification) => {
     if (!n.read) markRead(n.id);
     if (n.link) router.push(n.link);
@@ -139,6 +156,13 @@ export default function NotificationsPage() {
             >
               <CheckCheck className="h-3.5 w-3.5" />
               Mark all read
+            </button>
+            <button
+              onClick={deleteAllNotifications}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-xl border border-red-500/20 transition"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete all
             </button>
           </div>
         </div>

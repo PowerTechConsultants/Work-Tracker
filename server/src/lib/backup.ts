@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 dotenv.config();
-import { execSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
@@ -25,8 +25,12 @@ export async function createBackup(prefix = 'employee-tracker'): Promise<string>
   let host = process.env.MYSQL_HOST || 'localhost';
   let port = process.env.MYSQL_PORT || '3306';
   let user = process.env.MYSQL_USER || 'root';
-  let password = process.env.MYSQL_PASSWORD || '0000';
+  let password = process.env.MYSQL_PASSWORD || '';
   let database = process.env.MYSQL_DATABASE || 'hr';
+  if (!password && !url) {
+    console.error('[Backup] FATAL: MYSQL_PASSWORD (or DATABASE_URL) is required');
+    process.exit(1);
+  }
   if (url) {
     try {
       const u = new URL(url);
@@ -42,12 +46,23 @@ export async function createBackup(prefix = 'employee-tracker'): Promise<string>
   const backupPath = path.join(BACKUP_DIR, backupName);
 
   const env = { ...process.env, MYSQL_PWD: password };
-  const sanitize = (v: string) => v.replace(/[^a-zA-Z0-9._@:/-]/g, '');
-  const cmd = `mysqldump -h ${sanitize(host)} -P ${sanitize(port)} -u ${sanitize(user)} --single-transaction --routines --triggers ${sanitize(database)}`;
-  const dump = execSync(cmd, { maxBuffer: 1024 * 1024 * 50, env });
-  fs.writeFileSync(backupPath, dump);
+  // Use spawn args to avoid shell sanitize truncating passwords with ! $ etc.
+  const result = spawnSync('mysqldump', ['-h', host, '-P', String(port), '-u', user, '--single-transaction', '--routines', '--triggers', database], { env, maxBuffer: 1024 * 1024 * 200 });
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error(`mysqldump failed: ${result.stderr?.toString() || 'unknown'}`);
+  fs.writeFileSync(backupPath, result.stdout);
 
   console.log(`[Backup] Created: ${backupPath}`);
+  // Rotation: keep last 7 backups on 50GB Hostinger
+  try {
+    const files = fs.readdirSync(BACKUP_DIR).filter((f) => f.endsWith('.sql')).sort();
+    if (files.length > 7) {
+      for (const f of files.slice(0, files.length - 7)) {
+        fs.unlinkSync(path.join(BACKUP_DIR, f));
+        console.log(`[Backup] Rotated old: ${f}`);
+      }
+    }
+  } catch {}
   return backupPath;
 }
 

@@ -12,7 +12,8 @@
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
     "backup": "tsx src/lib/backup.ts",
-    "backup:list": "tsx src/lib/backup.ts list"
+    "backup:list": "tsx src/lib/backup.ts list",
+    "wipe:operational": "tsx src/scripts/wipe-operational.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1124.0",

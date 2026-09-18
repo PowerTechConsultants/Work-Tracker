@@ -36,16 +36,16 @@ router.get('/:id', requireRole('director', 'hr'), requireUuid('id'), apiCache({ 
 router.post('/', requireRole('director'), validate(createUserSchema), async (req: Request, res: Response, next) => {
   try {
     const user = await UsersService.create(req.body);
-    cache.delByPrefix('/api/v1/users');
+    cache.delContaining('/api/v1/users');
     try { await ActivityLogsService.create(req.user!.sub, 'create', 'user', user.id, { email: req.body.email, role: req.body.role }, req.ip); } catch (e) { console.error('[ActivityLogs] Failed:', e); }
     res.status(201).json(user);
   } catch (err) { next(err); }
 });
 
-router.patch('/:id', requireRole('director'), requireUuid('id'), validate(updateUserSchema), async (req: Request, res: Response, next) => {
+router.patch('/:id', requireRole('director', 'hr'), requireUuid('id'), validate(updateUserSchema), async (req: Request, res: Response, next) => {
   try {
     const user = await UsersService.update(req.params.id!, req.body);
-    cache.delByPrefix('/api/v1/users');
+    cache.delContaining('/api/v1/users');
     try { await ActivityLogsService.create(req.user!.sub, 'update', 'user', req.params.id, { changes: Object.keys(req.body) }, req.ip); } catch (e) { console.error('[ActivityLogs] Failed:', e); }
     res.json(user);
   } catch (err) { next(err); }
@@ -54,7 +54,7 @@ router.patch('/:id', requireRole('director'), requireUuid('id'), validate(update
 router.delete('/:id', requireRole('director'), requireUuid('id'), validate(deleteUserSchema), async (req: Request, res: Response, next) => {
   try {
     const result = await UsersService.delete(req.params.id!, req.body);
-    cache.delByPrefix('/api/v1/users');
+    cache.delContaining('/api/v1/users');
     try { await ActivityLogsService.create(req.user!.sub, 'delete', 'user', req.params.id, undefined, req.ip); } catch (e) { console.error('[ActivityLogs] Failed:', e); }
     res.json(result);
   } catch (err) { next(err); }

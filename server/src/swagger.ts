@@ -74,7 +74,7 @@ const options: swaggerJsdoc.Options = {
           properties: {
             id: { type: 'string' },
             userId: { type: 'string' },
-            type: { type: 'string', enum: ['casual', 'sick', 'paid', 'proposal', 'earned', 'unpaid', 'maternity', 'paternity'] },
+            type: { type: 'string', enum: ['casual', 'sick', 'proposal'] },
             status: { type: 'string', enum: ['pending', 'approved', 'rejected'] },
             startDate: { type: 'string', format: 'date' },
             endDate: { type: 'string', format: 'date' },

@@ -36,6 +36,12 @@ function l1DelByPrefix(prefix: string): void {
   }
 }
 
+function l1DelContaining(needle: string): void {
+  for (const key of l1Cache.keys()) {
+    if (key.includes(needle)) l1Cache.delete(key);
+  }
+}
+
 export const cache = {
   async get(key: string): Promise<any | undefined> {
     const l1 = l1Get(key);
@@ -67,6 +73,12 @@ export const cache = {
     l1DelByPrefix(prefix);
     const escaped = prefix.replace(/[%_]/g, '\\$&');
     await db.prepare("DELETE FROM api_cache WHERE cache_key LIKE ? ESCAPE '\\\\'").run(`${escaped}%`);
+  },
+
+  async delContaining(needle: string): Promise<void> {
+    l1DelContaining(needle);
+    const escaped = needle.replace(/[%_]/g, '\\$&');
+    await db.prepare("DELETE FROM api_cache WHERE cache_key LIKE ? ESCAPE '\\\\'").run(`%${escaped}%`);
   },
 
   async flush(): Promise<void> {

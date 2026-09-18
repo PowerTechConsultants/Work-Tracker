@@ -54,7 +54,7 @@ function isAdminRole(role: string): boolean {
 }
 
 export class FilesService {
-  static async upload(userId: string, file: Express.Multer.File): Promise<any> {
+  static async upload(userId: string, file: { mimetype: string; size: number; originalname: string; buffer: Buffer }): Promise<any> {
     if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
       throw new AppError(400, `File type '${file.mimetype}' is not allowed`);
     }

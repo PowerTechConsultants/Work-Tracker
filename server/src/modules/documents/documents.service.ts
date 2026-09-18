@@ -7,6 +7,8 @@ import { sendDocumentReady } from '../../lib/email';
 const SELECT = `
   SELECT d.*,
          u.first_name, u.last_name, u.employee_id, u.designation, u.joining_date,
+         u.dob, u.qualification, u.gender, u.address_street, u.address_city, u.address_state, u.address_pincode,
+         u.father_name, u.phone_number, u.email,
          dept.name AS department_name,
          iu.first_name AS issued_by_first, iu.last_name AS issued_by_last
   FROM document_requests d
@@ -42,6 +44,16 @@ function mapDoc(r: any) {
     designation: r.designation,
     departmentName: r.department_name,
     joiningDate: r.joining_date,
+    dob: r.dob,
+    qualification: r.qualification,
+    gender: r.gender,
+    addressStreet: r.address_street,
+    addressCity: r.address_city,
+    addressState: r.address_state,
+    addressPincode: r.address_pincode,
+    fatherName: r.father_name,
+    phone: r.phone_number,
+    email: r.email,
     issuedByName: r.issued_by_first ? `${r.issued_by_first} ${r.issued_by_last ?? ''}`.trim() : null,
   };
 }
@@ -158,24 +170,49 @@ export class DocumentsService {
 
     // Fill any employee fields the reviewer left blank from the live employee record
     const emp = await db.prepare(
-      `SELECT u.first_name, u.last_name, u.employee_id, u.designation, u.joining_date, dept.name AS department_name
+      `SELECT u.first_name, u.last_name, u.employee_id, u.designation, u.joining_date,
+              u.dob, u.qualification, u.address_street, u.address_city, u.address_state, u.address_pincode,
+              u.father_name, u.phone_number, u.email,
+              dept.name AS department_name
        FROM users u LEFT JOIN departments dept ON u.department_id = dept.id WHERE u.id = ?`
     ).get(doc.user_id) as any;
     const inputFields: Record<string, unknown> = { ...(input.fields ?? {}) };
     if (emp) {
+      const addressParts = [
+        emp.address_street,
+        emp.address_city,
+        emp.address_state,
+        emp.address_pincode ? `Pin- ${emp.address_pincode}` : '',
+      ].filter(Boolean);
       const snapshot: Record<string, string> = {
         employeeName: `${emp.first_name} ${emp.last_name}`.trim(),
         employeeId: emp.employee_id ?? '',
         designation: emp.designation ?? '',
         department: emp.department_name ?? '',
         joiningDate: emp.joining_date ?? '',
+        employmentFrom: emp.joining_date ?? '',
+        dob: emp.dob ?? '',
+        qualification: emp.qualification ?? '',
+        fatherName: emp.father_name ? (emp.father_name.startsWith('Mr.') ? emp.father_name : `Mr. ${emp.father_name}`) : '',
+        phone: emp.phone_number ?? '',
+        email: emp.email ?? '',
+        enrolmentNumber: emp.employee_id ? `Employee ID: ${emp.employee_id}` : '',
+        permanentAddress: addressParts.join('\n'),
       };
-      for (const [key, value] of Object.entries(snapshot)) {
-        if (!value) continue; // never inject empty strings - optional fields must stay undefined
-        const current = inputFields[key];
-        if (current === undefined || current === null || current === '') inputFields[key] = value;
+      // Compute tenure for relieving certificate if not provided
+      if (doc.doc_type === 'leaving_certificate' && emp.joining_date && (inputFields as any).relievingDate) {
+        const joining = new Date(emp.joining_date);
+        const relieving = new Date((inputFields as any).relievingDate);
+        const months = (relieving.getFullYear() - joining.getFullYear()) * 12 + (relieving.getMonth() - joining.getMonth()) + 1;
+        snapshot.tenure = `${months} months`;
       }
+    // Compute tenure already done above; now merge snapshot into inputFields
+    for (const [key, value] of Object.entries(snapshot)) {
+      if (!value) continue; // never inject empty strings - optional fields must stay undefined
+      const current = inputFields[key];
+      if (current === undefined || current === null || current === '') inputFields[key] = value;
     }
+  }
 
     const parsed = fieldSchema.safeParse(inputFields);
     if (!parsed.success) {
@@ -199,11 +236,22 @@ export class DocumentsService {
       const seq = (await db.prepare(
         "SELECT COUNT(*) AS c FROM document_requests WHERE doc_type = ? AND status = 'issued' AND YEAR(issued_at) = ?"
       ).get(doc.doc_type, year) as any).c;
-      const dn = `WT-${code}-${year}-${String(seq + 1).padStart(4, '0')}`;
+      let dn: string | null;
+      if (doc.doc_type === 'appointment_letter') {
+        dn = `SSPT/HR/${year}/${String(seq + 1).padStart(4, '0')}`;
+      } else if (doc.doc_type === 'leaving_certificate') {
+        dn = `SSPTPL/HR /${year.toString().slice(-2)}`;
+      } else if (doc.doc_type === 'internship_certificate') {
+        dn = `SSPTPL/HR /${year.toString().slice(-2)}`;
+      } else if (doc.doc_type === 'experience_certificate') {
+        dn = null; // Experience certificates don't have reference numbers
+      } else {
+        dn = `WT-${code}-${year}-${String(seq + 1).padStart(4, '0')}`;
+      }
 
       await db.prepare("UPDATE document_requests SET status = 'issued', fields = ?, doc_number = ?, issued_by_id = ?, issued_at = datetime('now'), updated_at = datetime('now') WHERE id = ?")
         .run(JSON.stringify(fields), dn, reviewedById, id);
-      return { doc: mapDoc(await db.prepare(`${SELECT} WHERE d.id = ?`).get(id)), docNumber: dn };
+      return { doc: mapDoc(await db.prepare(`${SELECT} WHERE d.id = ?`).get(id)), docNumber: dn || 'N/A' };
     })();
 
     const docNumber = updated.docNumber;
@@ -261,6 +309,7 @@ export class DocumentsService {
   static async download(id: string, userId: string, role: string) {
     const doc = await this.getById(id, userId, role);
     if (doc.status !== 'issued') throw new AppError(409, 'Document has not been issued yet');
+    // For experience certificates, docNumber might be null - handle this gracefully
     return { document: doc, generatedAt: new Date().toISOString() };
   }
 }

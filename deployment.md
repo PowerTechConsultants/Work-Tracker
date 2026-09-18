@@ -35,7 +35,7 @@ Create `server/.env` for production:
 NODE_ENV=production
 PORT=4000
 CORS_ORIGIN=https://yourdomain.com
-DATABASE_PATH=data.db
+DATABASE_URL=mysql://user:password@localhost:3306/employee_tracker
 JWT_ACCESS_SECRET=<generate with: node -e "console.log(require('crypto').randomBytes(48).toString('hex'))">
 JWT_REFRESH_SECRET=<generate with: node -e "console.log(require('crypto').randomBytes(48).toString('hex'))">
 JWT_ACCESS_TTL=15m
@@ -137,7 +137,6 @@ services:
     ports:
       - "4000:4000"
     volumes:
-      - ./server/data.db:/app/data.db
       - ./server/uploads:/app/uploads
       - ./server/backup:/app/backup
     environment:
@@ -206,11 +205,11 @@ CMD ["npm", "start"]
 
 ## Database Management
 
-### SQLite Considerations
+### MySQL Considerations
 
-- **Backup regularly:** The database is a single file (`data.db`)
-- **WAL mode:** Enabled for concurrent read performance
-- **Crash safety:** For production, add `PRAGMA synchronous = FULL` in `server/src/db/index.ts`
+- **Backup regularly:** Use `mysqldump` or the included backup script
+- **InnoDB:** Default storage engine for transactional support
+- **Connection pooling:** Configured in `server/src/db/index.ts`
 
 ### Backup Script
 
@@ -229,7 +228,7 @@ Backups are stored in `server/backup/` with timestamped filenames.
 
 ```bash
 cd server
-cp backup/employee-tracker-2026-07-24.db data.db
+mysql -u username -p employee_tracker < backup/employee-tracker-2026-07-24.sql
 ```
 
 ## HTTPS Setup
@@ -276,14 +275,17 @@ pm2 show employee-tracker-api
 
 ## Performance Tuning
 
-### SQLite
+### MySQL
 
-Add to `server/src/db/index.ts` for production:
+Configure in `server/src/db/index.ts` for production:
 
 ```typescript
-db.pragma('synchronous = FULL');    // Crash safety
-db.pragma('cache_size = -64000');   // 64MB cache
-db.pragma('busy_timeout = 5000');   // 5 second busy wait
+// MySQL connection pooling
+pool: {
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
+}
 ```
 
 ### Rate Limiting
@@ -316,23 +318,23 @@ pm2 start dist/src/server.js -i max --name employee-tracker-api
 
 ## Troubleshooting
 
-### Database locked errors
+### Database connection refused
 ```
-SQLITE_BUSY: database is locked
+Error: connect ECONNREFUSED 127.0.0.1:3306
 ```
-**Fix:** WAL mode is enabled by default. If persistent, check for long-running transactions. Restart the server.
+**Fix:** Ensure MySQL server is running. Check with `mysqladmin ping`. Verify connection details in `.env`.
+
+### Authentication failed
+```
+Error: Access denied for user 'user'@'localhost' (using password: YES)
+```
+**Fix:** Verify MySQL user credentials in `.env`. Ensure user has proper permissions: `GRANT ALL PRIVILEGES ON employee_tracker.* TO 'user'@'localhost';`
 
 ### Port already in use
 ```
 Error: listen EADDRINUSE :::4000
 ```
 **Fix:** `kill $(lsof -t -i:4000)` or change PORT in .env.
-
-### Permission denied on database
-```
-Error: unable to open database file
-```
-**Fix:** Ensure the `data.db` directory is writable by the Node.js process. `chown -R nodeuser:nodeuser /path/to/server`.
 
 ### Websocket connection failures
 **Fix:** Ensure Nginx proxies `/socket.io/` with `Upgrade` and `Connection` headers (see Nginx config above).

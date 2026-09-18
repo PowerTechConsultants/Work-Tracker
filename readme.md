@@ -8,14 +8,14 @@ A production-grade full-stack workforce management application for small to medi
 
 | Layer | Technology |
 |-------|-----------|
-| **Backend** | Node.js, Express 4.x, TypeScript, better-sqlite3 |
+| **Backend** | Node.js, Express 4.x, TypeScript, mysql2 (raw SQL) |
 | **Frontend** | Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS 4 |
-| **Database** | SQLite with WAL mode (single file, zero configuration) |
+| **Database** | MySQL 8.0 with InnoDB |
 | **Auth** | JWT access + refresh tokens (httpOnly cookies), bcrypt (12 rounds) |
 | **Real-time** | Socket.IO for live notifications |
 | **Charts** | Recharts for analytics dashboards |
 | **State** | TanStack React Query v5, Axios with interceptors |
-| **Testing** | Vitest + Supertest (backend) |
+| **Testing** | Vitest (frontend only) |
 | **Deployment** | Docker, PM2, Nginx reverse proxy |
 
 ## Quick Start
@@ -51,10 +51,10 @@ employee-work-tracker/
 │   │   ├── server.ts             # Entry point with graceful shutdown
 │   │   ├── middleware/           # Auth, RBAC, validation, compression, caching
 │   │   ├── lib/                  # Config, JWT, time utils, auto-absent, socket, backup
-│   │   ├── db/                   # SQLite connection, schema, migrations, seed
+│   │   ├── db/                   # MySQL connection, schema, migrations, setup
 │   │   ├── modules/              # 15 feature modules (auth, attendance, tasks, etc.)
 │   │   └── types/                # TypeScript type definitions
-│   ├── tests/                    # Vitest test suite
+│   ├── tests/                    # Frontend Vitest tests
 │   ├── load-tests/               # Artillery load tests
 │   └── package.json
 ├── web/                          # Frontend (Next.js 15 + React 19)
@@ -97,7 +97,7 @@ employee-work-tracker/
 
 - **JWT Rotation:** Access token (15min) in memory, refresh token (30d) in httpOnly cookie
 - **RBAC:** Director, HR, Employee roles with per-endpoint enforcement
-- **Rate Limiting:** Global, write, auth-specific limits with SQLite persistence
+- **Rate Limiting:** Global, write, auth-specific limits with MySQL persistence
 - **Account Lockout:** 5 failed attempts → 15-minute lockout
 - **Password Reset:** One-time use tokens with 1-hour expiry
 - **Circuit Breaker:** bcrypt failure protection
@@ -129,7 +129,7 @@ employee-work-tracker/
 | `npm start` | Production start |
 | `npm run lint` | Lint both packages |
 | `npm run typecheck` | Type check backend |
-| `npm test` | Run backend tests |
+| `npm test` | Run frontend tests |
 | `npm run db:seed` | Seed database |
 | `npm run backup` | Manual backup |
 | `npm run backup:list` | List backups |
@@ -140,7 +140,7 @@ employee-work-tracker/
 |---------|-------------|
 | `npm run dev` | Dev server with hot reload |
 | `npm run build` | TypeScript compilation |
-| `npm test` | Run Vitest test suite |
+| `npm test` | Frontend Vitest tests only (no backend tests) |
 | `npm run test:watch` | Watch mode |
 | `npm run test:coverage` | Coverage report |
 | `npm run lint` | ESLint |

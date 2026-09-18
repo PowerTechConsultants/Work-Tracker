@@ -6,17 +6,19 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, getApiError } from '@/lib/api';
 import { formatDate, statusColor } from '@/lib/utils';
 import { useState } from 'react';
-import { Plus, Loader2, Trash2, Download, FileText, CalendarClock } from 'lucide-react';
+import { Plus, Loader2, Trash2, Download, FileText } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { exportToCSV, exportToExcel, exportToPDF } from '@/lib/utils';
 import Modal from '@/components/Modal';
+import { useConfirm } from '@/components/ConfirmDialog';
 
 export default function ReportsPage() {
   const { user, loading } = useAuth();
   const qc = useQueryClient();
   const pathname = usePathname();
   const isAdmin = user?.role === 'director' || user?.role === 'hr';
+  const { confirm } = useConfirm();
   const [showCreate, setShowCreate] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
   const [form, setForm] = useState({ workCompletedToday: '', currentProgress: '' as unknown as number, pendingWork: '', blockers: '', tomorrowPlan: '', date: new Date().toISOString().split('T')[0] });
@@ -32,6 +34,7 @@ export default function ReportsPage() {
     queryKey: ['usersList'],
     queryFn: async () => (await api.get('/users?limit=100')).data,
     enabled: isAdmin,
+    retry: false,
   });
 
   const { data, isLoading, isError } = useQuery({
@@ -118,12 +121,6 @@ export default function ReportsPage() {
         <div className="flex items-center gap-1 bg-slate-800/50 rounded-xl p-1 w-fit border border-slate-700">
           <Link href="/reports" className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${pathname === '/reports' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}>
             <FileText className="h-4 w-4" />Reports
-          </Link>
-          <Link href="/reports/templates" className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${pathname === '/reports/templates' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}>
-            <FileText className="h-4 w-4" />Templates
-          </Link>
-          <Link href="/reports/scheduled" className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${pathname === '/reports/scheduled' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}>
-            <CalendarClock className="h-4 w-4" />Scheduled
           </Link>
         </div>
 
@@ -227,7 +224,7 @@ export default function ReportsPage() {
                   )}
                   {isAdmin && (
                     <button
-                      onClick={() => { if (confirm('Delete this report?')) deleteReport.mutate(r.id); }}
+                      onClick={async () => { if (await confirm({ title: 'Delete Report', message: 'Are you sure you want to delete this report?', variant: 'danger' })) deleteReport.mutate(r.id); }}
                       disabled={deleteReport.isPending}
                       className="rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 px-2 py-1.5 text-xs font-medium transition disabled:opacity-50"
                     >

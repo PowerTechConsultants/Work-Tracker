@@ -23,6 +23,29 @@ export function formatDateTime(date: string | Date) {
   });
 }
 
+export const IST_TIMEZONE = 'Asia/Kolkata';
+
+// Server stores datetimes as UTC strings like "YYYY-MM-DD HH:mm:ss". Parse
+// them as UTC (not browser-local) so display math matches the real instant.
+export function parseServerTime(value: string | Date | null | undefined): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  const s = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}$/.test(s)) {
+    const d = new Date(s.replace(' ', 'T') + 'Z');
+    return isNaN(d.getTime()) ? null : d;
+  }
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// Formats a server UTC datetime as IST time (HH:mm:ss).
+export function formatISTTime(value: string | Date | null | undefined): string {
+  const d = parseServerTime(value);
+  if (!d) return '-';
+  return d.toLocaleTimeString('en-US', { timeZone: IST_TIMEZONE, hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
 export const DAY_HOURS = 8;
 
 export function dayTypeLabel(status: string, workingHours?: number | null): string {

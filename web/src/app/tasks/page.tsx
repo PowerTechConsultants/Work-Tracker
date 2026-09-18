@@ -78,6 +78,7 @@ export default function TasksPage() {
   const { data: users } = useQuery({
     queryKey: ['usersList'],
     queryFn: async () => (await api.get('/users?limit=100')).data,
+    retry: false,
     enabled: !loading && !!user && isAdmin,
   });
 

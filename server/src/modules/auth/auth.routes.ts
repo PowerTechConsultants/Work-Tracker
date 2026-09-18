@@ -58,7 +58,7 @@ router.post('/login', validate(loginSchema), loginLimiter, async (req: Request, 
 router.post('/register', authenticate, requireRole('director'), validate(registerSchema), async (req: Request, res: Response, next) => {
   try {
     const user = await AuthService.register(req.body);
-    try { await ActivityLogsService.create(req.user!.sub, 'register', 'auth', user.id, { email: req.body.email, role: req.body.role }, req.ip); } catch (e) { console.error('[ActivityLogs] Failed:', e); }
+    try { await ActivityLogsService.create(req.user!.sub, 'register', 'auth', user.id, { email: req.body.email, role: user.role }, req.ip); } catch (e) { console.error('[ActivityLogs] Failed:', e); }
     res.status(201).json(user);
   } catch (err) { next(err); }
 });

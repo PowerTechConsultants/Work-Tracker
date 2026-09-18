@@ -5,7 +5,7 @@ export const createUserSchema = z.object({
   password: z.string().trim().min(8, 'Password must be at least 8 characters').max(128, 'Password too long').regex(/[A-Z]/, 'Password must contain at least one uppercase letter').regex(/[a-z]/, 'Password must contain at least one lowercase letter').regex(/[0-9]/, 'Password must contain at least one number'),
   firstName: z.string().trim().min(1, 'First name is required').max(100, 'First name too long').regex(/^[a-zA-Z\s'-]+$/, 'First name contains invalid characters'),
   lastName: z.string().trim().min(1, 'Last name is required').max(100, 'Last name too long').regex(/^[a-zA-Z\s'-]+$/, 'Last name contains invalid characters'),
-  phoneNumber: z.string().trim().regex(/^\+?[1-9]\d{1,14}$/, 'Invalid phone number format').optional().or(z.literal('')),
+  phoneNumber: z.string().trim().min(1, 'Phone number is required').max(16, 'Phone number too long').regex(/^\+?[1-9]\d{1,14}$/, 'Invalid phone number format'),
   role: z.enum(['director', 'hr', 'employee']),
   departmentId: z.string().trim().min(1, 'Invalid department ID').optional(),
   designation: z.string().trim().max(100, 'Designation too long').optional(),
@@ -27,7 +27,7 @@ export const createUserSchema = z.object({
 export const updateUserSchema = z.object({
   firstName: z.string().trim().min(1, 'First name is required').max(100, 'First name too long').regex(/^[a-zA-Z\s'-]+$/, 'First name contains invalid characters').optional(),
   lastName: z.string().trim().min(1, 'Last name is required').max(100, 'Last name too long').regex(/^[a-zA-Z\s'-]+$/, 'Last name contains invalid characters').optional(),
-  phoneNumber: z.string().trim().regex(/^\+?[1-9]\d{1,14}$/, 'Invalid phone number format').optional().or(z.literal('')),
+  phoneNumber: z.string().trim().min(1, 'Phone number is required').max(16, 'Phone number too long').regex(/^\+?[1-9]\d{1,14}$/, 'Invalid phone number format'),
   role: z.enum(['director', 'hr', 'employee']).optional(),
   departmentId: z.string().trim().min(1, 'Invalid department ID').nullable().optional(),
   designation: z.string().trim().max(100, 'Designation too long').optional(),

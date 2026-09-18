@@ -5,7 +5,10 @@ export const createTaskSchema = z.object({
   description: z.string().trim().max(5000, 'Description too long').optional(),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
   dueDate: z.string().trim().datetime('Invalid date format').optional(),
-  assigneeIds: z.array(z.string().trim().min(1, 'Invalid assignee ID')).min(1, 'At least one assignee is required'),
+  assigneeIds: z.array(z.string().trim().min(1, 'Invalid assignee ID')).min(1, 'At least one assignee is required').refine(
+    (ids) => new Set(ids).size === ids.length,
+    { message: 'Duplicate assignees are not allowed' }
+  ),
   departmentId: z.string().trim().min(1, 'Invalid department ID').optional(),
   estimatedHours: z.number().min(0, 'Hours must be positive').max(1000, 'Hours too high').optional(),
 });
@@ -17,7 +20,10 @@ export const updateTaskSchema = z.object({
   status: z.enum(['pending', 'in_progress', 'completed', 'on_hold', 'cancelled']).optional(),
   progressPercent: z.number().min(0, 'Progress must be between 0-100').max(100, 'Progress must be between 0-100').optional(),
   dueDate: z.string().trim().datetime('Invalid date format').nullable().optional(),
-  assigneeIds: z.array(z.string().trim().min(1, 'Invalid assignee ID')).optional(),
+  assigneeIds: z.array(z.string().trim().min(1, 'Invalid assignee ID')).optional().refine(
+    (ids) => !ids || new Set(ids).size === ids.length,
+    { message: 'Duplicate assignees are not allowed' }
+  ),
   estimatedHours: z.number().min(0, 'Hours must be positive').max(1000, 'Hours too high').optional(),
   actualHours: z.number().min(0, 'Hours must be positive').max(1000, 'Hours too high').optional(),
 });

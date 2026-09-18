@@ -10,6 +10,7 @@ export const api = axios.create({
 let _accessToken: string | null = null;
 let _refreshPromise: Promise<string> | null = null;
 const _tokenListeners = new Set<(token: string | null) => void>();
+const _retryQueue: Array<{ resolve: (token: string) => void; reject: (err: any) => void }> = [];
 
 export const setAccessToken = (t: string | null) => { _accessToken = t; _tokenListeners.forEach(fn => fn(t)); };
 export const getAccessToken = () => _accessToken;
@@ -21,6 +22,8 @@ export async function doRefresh(): Promise<string> {
     .post<{ accessToken: string }>('/auth/refresh', {})
     .then((res) => {
       setAccessToken(res.data.accessToken);
+      // Re-auth socket with fresh token to prevent "Invalid token" after refresh
+      import('./socket').then((m) => m.initializeSocket(res.data.accessToken)).catch(() => {});
       return _accessToken as string;
     })
     .catch((err) => {
@@ -61,8 +64,14 @@ api.interceptors.response.use(
       if (orig.url?.includes('/auth/login') || orig.url?.includes('/auth/refresh') || orig.url?.includes('/auth/logout')) return Promise.reject(error);
       orig._retry = true;
       try {
-        const accessToken = await doRefresh();
-        orig.headers.Authorization = `Bearer ${accessToken}`;
+        // If a refresh is already in progress, wait for it instead of triggering another
+        if (_refreshPromise) {
+          await _refreshPromise;
+        } else {
+          await doRefresh();
+        }
+        if (!_accessToken) throw new Error('No token after refresh');
+        orig.headers.Authorization = `Bearer ${_accessToken}`;
         return api(orig);
       } catch {
         if (typeof window !== 'undefined') {

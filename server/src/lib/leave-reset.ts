@@ -66,14 +66,6 @@ async function proposalEntitlement(userId: string, year: number): Promise<number
   return remainingQuarters * 4; // 4 proposal days per quarter
 }
 
-async function hasLeaveBefore(userId: string, year: number): Promise<boolean> {
-  const rows = await db.prepare("SELECT start_date, leave_year FROM leaves WHERE user_id = ? AND status = 'approved'").all(userId) as any[];
-  return rows.some((r: any) => {
-    const ly = r.leave_year ?? new Date(`${r.start_date}T00:00:00Z`).getUTCFullYear();
-    return ly < year;
-  });
-}
-
 async function computeCarryforward(userId: string, prevYear: number): Promise<number> {
   const entitlement = await proposalEntitlement(userId, prevYear);
   if (entitlement === 0) return 0;

@@ -35,7 +35,7 @@ router.get('/:id', requireRole('director', 'hr'), requireUuid('id'), apiCache({ 
 router.post('/', requireRole('director'), validate(createDepartmentSchema), async (req: Request, res: Response, next) => {
   try {
     const dept = await DepartmentsService.create(req.body);
-    cache.delByPrefix('/api/v1/departments');
+    cache.delContaining('/api/v1/departments');
     res.status(201).json(dept);
   } catch (err) { next(err); }
 });
@@ -43,7 +43,7 @@ router.post('/', requireRole('director'), validate(createDepartmentSchema), asyn
 router.patch('/:id', requireRole('director'), requireUuid('id'), validate(updateDepartmentSchema), async (req: Request, res: Response, next) => {
   try {
     const dept = await DepartmentsService.update(req.params.id!, req.body);
-    cache.delByPrefix('/api/v1/departments');
+    cache.delContaining('/api/v1/departments');
     res.json(dept);
   } catch (err) { next(err); }
 });
@@ -51,7 +51,7 @@ router.patch('/:id', requireRole('director'), requireUuid('id'), validate(update
 router.delete('/:id', requireRole('director'), requireUuid('id'), async (req: Request, res: Response, next) => {
   try {
     const result = await DepartmentsService.delete(req.params.id!);
-    cache.delByPrefix('/api/v1/departments');
+    cache.delContaining('/api/v1/departments');
     res.json(result);
   } catch (err) { next(err); }
 });

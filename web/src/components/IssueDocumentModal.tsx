@@ -5,18 +5,41 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import Modal from '@/components/Modal';
 import { api } from '@/lib/api';
-import { DOC_TEMPLATES, documentPdfPreviewUrl } from '@/lib/documentTemplates';
+import {
+  DOC_TEMPLATES,
+  documentPdfPreviewUrl,
+  DEFAULT_APPOINTMENT_RESPONSIBILITIES,
+  DEFAULT_APPOINTMENT_TERMS,
+  DEFAULT_EXPERIENCE_PROJECT_REMARKS,
+  getPronoun,
+} from '@/lib/documentTemplates';
 import type { DocumentRequest } from '@/types/api';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 function buildInitialFields(doc: DocumentRequest): Record<string, any> {
+  const addressParts = [
+    doc.addressStreet ? (doc.addressStreet.startsWith('At-') || doc.addressStreet.startsWith('Behind') ? doc.addressStreet : `At- ${doc.addressStreet}`) : '',
+    doc.addressCity ? `P.O/PS- ${doc.addressCity}` : '',
+    doc.addressPincode ? `Pin- ${doc.addressPincode}` : '',
+  ].filter(Boolean);
+
   const snapshot: Record<string, string> = {
     name: `${doc.firstName} ${doc.lastName}`.trim(),
     employeeId: doc.employeeId ?? '',
     designation: doc.designation ?? '',
     department: doc.departmentName ?? '',
     joiningDate: (doc.joiningDate ?? '').split('T')[0] ?? '',
+    employmentFrom: (doc.joiningDate ?? '').split('T')[0] ?? '',
+    dob: (doc.dob ?? '').split('T')[0] ?? '',
+    qualification: doc.qualification ?? '',
+    gender: doc.gender ?? '',
+    fatherName: doc.fatherName ? (doc.fatherName.startsWith('Mr.') ? doc.fatherName : `Mr. ${doc.fatherName}`) : '',
+    phone: doc.phone ?? '',
+    email: doc.email ?? '',
+    address: addressParts.length > 0 ? addressParts.join('\n') : [doc.addressStreet, doc.addressCity, doc.addressState, doc.addressPincode].filter(Boolean).join('\n'),
+    enrolmentNumber: doc.employeeId ?? '',
+    tenure: doc.tenure ? (doc.tenure.startsWith('last') ? doc.tenure : `last ${doc.tenure}`) : '',
   };
   const now = new Date();
   const next: Record<string, any> = {};
@@ -25,14 +48,52 @@ function buildInitialFields(doc: DocumentRequest): Record<string, any> {
   for (const fdef of template.fields) {
     next[fdef.key] = fdef.prefill ? (snapshot[fdef.prefill] ?? '') : '';
   }
-  if (doc.docType === 'appointment_letter') next.probationMonths = 6;
+
+  if (doc.docType === 'appointment_letter') {
+    if (!next.designation) next.designation = 'Project Associate';
+    if (!next.monthlySalary) next.monthlySalary = 'Rs. 6000/-';
+    if (!next.workingHours) next.workingHours = '8 hours per day';
+    if (!next.responsibilities) {
+      next.responsibilities = DEFAULT_APPOINTMENT_RESPONSIBILITIES.join('\n');
+    }
+    if (!next.terms) {
+      next.terms = DEFAULT_APPOINTMENT_TERMS(next.monthlySalary, next.workingHours).join('\n');
+    }
+  }
+
+  if (doc.docType === 'experience_certificate') {
+    if (!next.designation) next.designation = 'Energy Engineer';
+    if (!next.projectRemarks) {
+      next.projectRemarks = DEFAULT_EXPERIENCE_PROJECT_REMARKS(snapshot.name, snapshot.gender);
+    }
+    if (!next.conductRemark) {
+      const p = getPronoun(snapshot.gender);
+      next.conductRemark = `${p.subject} is sincere, hardworking, and ${p.possessive} conduct is good.`;
+    }
+    if (!next.place) next.place = 'Bhubaneswar';
+  }
+
+  if (doc.docType === 'leaving_certificate') {
+    const today = now.toISOString().split('T')[0];
+    if (!next.resignationDate) next.resignationDate = today;
+    if (!next.relievingDate) next.relievingDate = today;
+    if (!next.settlementDate) next.settlementDate = today;
+    if (!next.tenure) next.tenure = 'last 9 months';
+  }
+
   if (doc.docType === 'salary_slip') {
     next.month = MONTHS[now.getMonth()];
     next.year = now.getFullYear();
-    next.paidDays = 30;
-    next.lopDays = 0;
+    next.daysWorked = 30;
+    next.uan = '';
   }
-  return next;
+
+  if (doc.docType === 'internship_certificate') {
+    if (!next.registrationNumber) next.registrationNumber = '';
+    if (!next.fatherName) next.fatherName = '';
+  }
+
+  return { ...next, ...((doc.fields as Record<string, any>) ?? {}) };
 }
 
 interface IssueDocumentModalProps {
@@ -50,6 +111,19 @@ export default function IssueDocumentModal({ doc, onClose }: IssueDocumentModalP
   const [showPreview, setShowPreview] = useState(false);
 
   const setField = (key: string, value: any) => setFields((prev) => ({ ...prev, [key]: value }));
+
+  const genderWarning = useMemo(() => {
+    const name = (fields.employeeName ?? '').trim().toLowerCase();
+    const gender = (fields.gender ?? '').toLowerCase();
+    if (!name || !gender) return null;
+    const femalePatterns = [/\b(a|i|ya|ni|ka|ta|ini|ita|ika|priya|devi|kumari|lata|sunita|sita|rita|gita|nita|geeta|maya|sudha|uma|rani)\b/i];
+    const malePatterns = [/\b(kumar|singh|rajan|nath|mishra|das|patel|sharma|gupta|verma|jha|reddy|naidu|nair|menon|iyyer)\b/i];
+    const isFemaleName = femalePatterns.some(p => p.test(name));
+    const isMaleName = malePatterns.some(p => p.test(name));
+    if (gender === 'male' && isFemaleName) return `Name "${fields.employeeName}" appears female but gender is Male. Consider changing to Female.`;
+    if (gender === 'female' && isMaleName) return `Name "${fields.employeeName}" appears male but gender is Female. Consider changing to Male.`;
+    return null;
+  }, [fields.employeeName, fields.gender]);
 
   const previewUrl = useMemo(() => {
     if (!showPreview) return null;
@@ -89,6 +163,13 @@ export default function IssueDocumentModal({ doc, onClose }: IssueDocumentModalP
           </p>
         </div>
 
+        {genderWarning && (
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-2.5 flex items-start gap-2">
+            <span className="text-amber-400 text-sm mt-0.5">⚠</span>
+            <p className="text-xs text-amber-200">{genderWarning}</p>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {template.fields.map((f) => (
             <div key={f.key} className={f.type === 'textarea' ? 'sm:col-span-2' : ''}>
@@ -97,9 +178,9 @@ export default function IssueDocumentModal({ doc, onClose }: IssueDocumentModalP
                 <textarea
                   value={fields[f.key] ?? ''}
                   onChange={(e) => setField(f.key, e.target.value)}
-                  rows={2}
+                  rows={f.key === 'responsibilities' || f.key === 'terms' || f.key === 'projectRemarks' ? 5 : f.key === 'permanentAddress' ? 3 : 2}
                   placeholder={f.placeholder ?? ''}
-                  className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-500"
+                  className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 font-sans leading-relaxed"
                 />
               ) : f.type === 'select' && f.options ? (
                 <select
