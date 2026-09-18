@@ -404,30 +404,30 @@ const migrations: Array<{ version: number; name: string; up: () => Promise<void>
     up: async () => {
       await db.exec(`
         CREATE TABLE IF NOT EXISTS report_templates (
-          id TEXT PRIMARY KEY,
-          user_id TEXT NOT NULL,
-          name TEXT NOT NULL,
+          id VARCHAR(36) PRIMARY KEY,
+          user_id VARCHAR(36) NOT NULL,
+          name VARCHAR(255) NOT NULL,
           description TEXT,
-          type TEXT NOT NULL DEFAULT 'daily',
+          type VARCHAR(20) NOT NULL DEFAULT 'daily',
           fields TEXT,
-          is_default INTEGER NOT NULL DEFAULT 0,
-          created_at TEXT NOT NULL DEFAULT (datetime('now')),
-          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          is_default TINYINT NOT NULL DEFAULT 0,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         CREATE INDEX IF NOT EXISTS idx_report_templates_user ON report_templates(user_id);
 
         CREATE TABLE IF NOT EXISTS scheduled_reports (
-          id TEXT PRIMARY KEY,
-          template_id TEXT NOT NULL,
-          user_id TEXT NOT NULL,
+          id VARCHAR(36) PRIMARY KEY,
+          template_id VARCHAR(36) NOT NULL,
+          user_id VARCHAR(36) NOT NULL,
           recipients TEXT,
-          schedule_cron TEXT NOT NULL,
-          format TEXT NOT NULL DEFAULT 'pdf',
-          is_active INTEGER NOT NULL DEFAULT 1,
-          last_run_at TEXT,
-          created_at TEXT NOT NULL DEFAULT (datetime('now')),
-          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          schedule_cron VARCHAR(100) NOT NULL,
+          format VARCHAR(10) NOT NULL DEFAULT 'pdf',
+          is_active TINYINT NOT NULL DEFAULT 1,
+          last_run_at DATETIME,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           FOREIGN KEY (template_id) REFERENCES report_templates(id) ON DELETE CASCADE,
           FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
@@ -435,12 +435,12 @@ const migrations: Array<{ version: number; name: string; up: () => Promise<void>
         CREATE INDEX IF NOT EXISTS idx_scheduled_reports_template ON scheduled_reports(template_id);
 
         CREATE TABLE IF NOT EXISTS scheduled_report_results (
-          id TEXT PRIMARY KEY,
-          schedule_id TEXT NOT NULL,
-          status TEXT NOT NULL DEFAULT 'pending',
-          file_path TEXT,
+          id VARCHAR(36) PRIMARY KEY,
+          schedule_id VARCHAR(36) NOT NULL,
+          status VARCHAR(20) NOT NULL DEFAULT 'pending',
+          file_path VARCHAR(255),
           error_message TEXT,
-          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (schedule_id) REFERENCES scheduled_reports(id) ON DELETE CASCADE
         );
         CREATE INDEX IF NOT EXISTS idx_scheduled_report_results_schedule ON scheduled_report_results(schedule_id);
@@ -454,13 +454,13 @@ const migrations: Array<{ version: number; name: string; up: () => Promise<void>
       await addColumnIfMissing('notifications', 'channel', "channel VARCHAR(20) NOT NULL DEFAULT 'in_app'");
       await db.exec(`
         CREATE TABLE IF NOT EXISTS email_logs (
-          id TEXT PRIMARY KEY,
-          recipient_id TEXT,
-          recipient_email TEXT NOT NULL,
-          subject TEXT NOT NULL,
-          status TEXT NOT NULL DEFAULT 'sent',
+          id VARCHAR(36) PRIMARY KEY,
+          recipient_id VARCHAR(36),
+          recipient_email VARCHAR(255) NOT NULL,
+          subject VARCHAR(255) NOT NULL,
+          status VARCHAR(20) NOT NULL DEFAULT 'sent',
           error_message TEXT,
-          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (recipient_id) REFERENCES users(id) ON DELETE SET NULL
         );
         CREATE INDEX IF NOT EXISTS idx_email_logs_recipient ON email_logs(recipient_id);
@@ -474,14 +474,14 @@ const migrations: Array<{ version: number; name: string; up: () => Promise<void>
     up: async () => {
       await db.exec(`
         CREATE TABLE IF NOT EXISTS file_uploads (
-          id TEXT PRIMARY KEY,
-          user_id TEXT NOT NULL,
-          original_name TEXT NOT NULL,
-          storage_key TEXT NOT NULL,
-          mime_type TEXT NOT NULL,
-          size_bytes INTEGER NOT NULL,
-          url TEXT NOT NULL,
-          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          id VARCHAR(36) PRIMARY KEY,
+          user_id VARCHAR(36) NOT NULL,
+          original_name VARCHAR(255) NOT NULL,
+          storage_key VARCHAR(255) NOT NULL,
+          mime_type VARCHAR(100) NOT NULL,
+          size_bytes INT NOT NULL,
+          url VARCHAR(512) NOT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         CREATE TABLE IF NOT EXISTS file_retention_policies (
@@ -505,40 +505,40 @@ const migrations: Array<{ version: number; name: string; up: () => Promise<void>
     up: async () => {
       await db.exec(`
         CREATE TABLE IF NOT EXISTS password_policies (
-          id TEXT PRIMARY KEY,
-          min_length INTEGER NOT NULL DEFAULT 12,
-          require_uppercase INTEGER NOT NULL DEFAULT 1,
-          require_lowercase INTEGER NOT NULL DEFAULT 1,
-          require_number INTEGER NOT NULL DEFAULT 1,
-          require_special INTEGER NOT NULL DEFAULT 1,
-          max_age_days INTEGER NOT NULL DEFAULT 90,
-          history_count INTEGER NOT NULL DEFAULT 5,
-          created_at TEXT NOT NULL DEFAULT (datetime('now')),
-          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+          id VARCHAR(36) PRIMARY KEY,
+          min_length INT NOT NULL DEFAULT 12,
+          require_uppercase TINYINT NOT NULL DEFAULT 1,
+          require_lowercase TINYINT NOT NULL DEFAULT 1,
+          require_number TINYINT NOT NULL DEFAULT 1,
+          require_special TINYINT NOT NULL DEFAULT 1,
+          max_age_days INT NOT NULL DEFAULT 90,
+          history_count INT NOT NULL DEFAULT 5,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         );
 
         CREATE TABLE IF NOT EXISTS password_history (
-          id TEXT PRIMARY KEY,
-          user_id TEXT NOT NULL,
-          password_hash TEXT NOT NULL,
-          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          id VARCHAR(36) PRIMARY KEY,
+          user_id VARCHAR(36) NOT NULL,
+          password_hash VARCHAR(255) NOT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
 
         CREATE INDEX IF NOT EXISTS idx_password_history_user ON password_history(user_id, created_at DESC);
 
         CREATE TABLE IF NOT EXISTS api_audit_log (
-          id TEXT PRIMARY KEY,
-          user_id TEXT,
-          method TEXT NOT NULL,
-          path TEXT NOT NULL,
-          status_code INTEGER,
-          ip_address TEXT,
-          user_agent TEXT,
-          request_size INTEGER,
-          response_time_ms INTEGER,
+          id VARCHAR(36) PRIMARY KEY,
+          user_id VARCHAR(36),
+          method VARCHAR(10) NOT NULL,
+          path VARCHAR(255) NOT NULL,
+          status_code INT,
+          ip_address VARCHAR(45),
+          user_agent VARCHAR(255),
+          request_size INT,
+          response_time_ms INT,
           error_message TEXT,
-          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
         );
 
