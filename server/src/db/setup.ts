@@ -21,6 +21,15 @@ async function setup() {
   }
 
   await ensureAdminBootstrap();
+  console.log('[SETUP] Done');
+  // Close pool to allow process to exit (tsx watch keeps pool alive)
+  const { pool } = await import('./index.js');
+  await pool.end();
+  process.exit(0);
 }
 
-setup();
+setup().catch(async (e) => {
+  console.error('[SETUP] Failed:', e);
+  try { const { pool } = await import('./index.js'); await pool.end(); } catch {}
+  process.exit(1);
+});
