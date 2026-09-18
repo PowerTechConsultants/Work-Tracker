@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  ...(process.env.HOSTINGER === 'true' ? { output: 'export' as const } : {}),
   allowedDevOrigins: ['127.0.0.1', '192.168.0.108', '*.loca.lt', '*.lhr.life', '*.localhost.run', '*.serveo.net'],
   eslint: {
     ignoreDuringBuilds: true,

@@ -10,6 +10,9 @@ import { concurrencyLimiter } from './lib/concurrency-limiter';
 import { auditLog } from './middleware/audit-log';
 import rateLimit from 'express-rate-limit';
 import { randomUUID } from 'crypto';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { config } from './lib/config';
 import { RateLimitStore } from './lib/rate-limit-store';
 import db from './db';
@@ -216,6 +219,22 @@ export function createApp() {
       }
     };
     app.use('/api-docs', basicAuth, swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+  }
+
+  // Hostinger Shared: serve web static export via single server process
+  if (process.env.HOSTINGER === 'true') {
+    try {
+      const webOut = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../web/out');
+      if (fs.existsSync(webOut)) {
+        app.use(express.static(webOut));
+        app.get('*', (req, res, next) => {
+          if (req.path.startsWith('/api') || req.path.startsWith('/socket.io') || req.path.startsWith('/health') || req.path.startsWith('/ready') || req.path.startsWith('/api-docs')) return next();
+          const indexPath = path.join(webOut, 'index.html');
+          if (fs.existsSync(indexPath)) res.sendFile(indexPath);
+          else next();
+        });
+      }
+    } catch {}
   }
 
   // 404
