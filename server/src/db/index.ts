@@ -250,8 +250,8 @@ const migrations: Array<{ version: number; name: string; up: () => Promise<void>
       await db.exec('DROP TABLE IF EXISTS time_entries');
       await db.exec('DROP TABLE IF EXISTS chat_messages');
       await db.exec(`CREATE TABLE IF NOT EXISTS token_blacklist (user_id TEXT PRIMARY KEY, revoked_at TEXT NOT NULL DEFAULT (datetime('now')), expires_at TEXT NOT NULL)`);
-      await db.exec(`CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT (datetime('now')))`);
-      await db.exec(`CREATE TABLE IF NOT EXISTS rate_limits (key TEXT PRIMARY KEY, hits INTEGER NOT NULL DEFAULT 0, expires_at TEXT NOT NULL)`);
+      await db.exec("CREATE TABLE IF NOT EXISTS app_settings (`key` TEXT PRIMARY KEY, `value` TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT (datetime('now')))");
+      await db.exec("CREATE TABLE IF NOT EXISTS rate_limits (`key` TEXT PRIMARY KEY, hits INTEGER NOT NULL DEFAULT 0, expires_at TEXT NOT NULL)");
       await db.exec('CREATE INDEX IF NOT EXISTS idx_token_blacklist_expires ON token_blacklist(expires_at)');
       await db.exec('CREATE INDEX IF NOT EXISTS idx_rate_limits_expires ON rate_limits(expires_at)');
       await addColumnIfMissing('team_members', 'role', "role TEXT NOT NULL DEFAULT 'member'");
