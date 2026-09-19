@@ -1,7 +1,9 @@
 import axios from 'axios';
 
+const apiOrigin = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, '');
+
 export const api = axios.create({
-  baseURL: '/api/v1',
+  baseURL: apiOrigin ? `${apiOrigin}/api/v1` : '/api/v1',
   headers: { 'Content-Type': 'application/json' },
   withCredentials: true,
   timeout: 30000,
