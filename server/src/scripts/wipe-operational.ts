@@ -11,6 +11,12 @@ import { pool } from '../db/index.js';
 const KEEP_DEPT = 'Engineering';
 
 async function wipe() {
+  // Production guard: require explicit --force flag (prevents accidental prod wipe)
+  if (process.env.NODE_ENV === 'production' && !process.argv.includes('--force')) {
+    console.error('[Wipe] ABORT: refusing to run in production without --force flag.');
+    console.error('[Wipe] Re-run as: npm run wipe:operational -- --force (after npm run backup)');
+    process.exit(1);
+  }
   console.log('[Wipe] Starting — keeping admin & stable config...');
 
   // 1. Verify admin exists before wipe

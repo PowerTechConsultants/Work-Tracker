@@ -41,6 +41,16 @@ const loginLimiter = rateLimit({
   store: new RateLimitStore('login'),
 });
 
+const refreshLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: config.nodeEnv === 'production' ? 60 : 200,
+  keyGenerator: (req) => req.ip || 'unknown',
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many refresh attempts. Try again later.' },
+  store: new RateLimitStore('refresh'),
+});
+
 router.post('/login', validate(loginSchema), loginLimiter, async (req: Request, res: Response, next) => {
   try {
     const result = await AuthService.login(req.body, req.headers['user-agent'], req.ip);
@@ -63,7 +73,7 @@ router.post('/register', authenticate, requireRole('director'), validate(registe
   } catch (err) { next(err); }
 });
 
-router.post('/refresh', async (req: Request, res: Response, next) => {
+router.post('/refresh', refreshLimiter, async (req: Request, res: Response, next) => {
   try {
     const refreshToken = req.cookies?.refreshToken;
     if (!refreshToken) return res.status(400).json({ error: 'Refresh token is required' });
