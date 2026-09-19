@@ -17,7 +17,11 @@ const isJwtExpired = (token: string) => {
 export const initializeSocket = (token: string) => {
   const API_URL =
     process.env.NEXT_PUBLIC_API_URL ||
-    (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:4000` : 'http://localhost:4000');
+    (typeof window !== 'undefined'
+      ? (process.env.NODE_ENV === 'production'
+        ? window.location.origin
+        : `${window.location.protocol}//${window.location.hostname}:4000`)
+      : 'http://localhost:4000');
 
   if (socket && (currentToken !== token || socketUrl !== API_URL)) {
     socket.close();

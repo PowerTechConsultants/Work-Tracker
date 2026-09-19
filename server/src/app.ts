@@ -222,10 +222,15 @@ export function createApp() {
   }
 
   // Hostinger Shared: serve web static export via single server process
-  if (process.env.HOSTINGER === 'true') {
+  if (process.env.HOSTINGER === 'true' || config.nodeEnv === 'production') {
     try {
-      const webOut = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../web/out');
-      if (fs.existsSync(webOut)) {
+      const webOutCandidates = [
+        path.resolve(process.cwd(), 'web', 'out'),
+        path.resolve(process.cwd(), '..', 'web', 'out'),
+        path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../web/out'),
+      ];
+      const webOut = webOutCandidates.find((candidate) => fs.existsSync(candidate));
+      if (webOut) {
         app.use(express.static(webOut));
         app.get('*', (req, res, next) => {
           if (req.path.startsWith('/api') || req.path.startsWith('/socket.io') || req.path.startsWith('/health') || req.path.startsWith('/ready') || req.path.startsWith('/api-docs')) return next();

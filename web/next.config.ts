@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
+const hostingerExport = process.env.HOSTINGER === 'true' || process.env.NODE_ENV === 'production';
+
 const nextConfig: NextConfig = {
-  ...(process.env.HOSTINGER === 'true' ? { output: 'export' as const } : {}),
+  ...(hostingerExport ? { output: 'export' as const } : {}),
   allowedDevOrigins: ['127.0.0.1', '192.168.0.108', '*.loca.lt', '*.lhr.life', '*.localhost.run', '*.serveo.net'],
   eslint: {
     ignoreDuringBuilds: true,
@@ -18,9 +20,8 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react', '@tanstack/react-query'],
   },
-  // HOSTINGER=true serves /api same-origin via server.js — omit rewrites entirely,
-  // since Next flags rewrites+export combos and trips deploy checks
-  ...(process.env.HOSTINGER === 'true' ? {} : {
+  // The production build is served by Express on Hostinger, so API routes are same-origin.
+  ...(hostingerExport ? {} : {
     rewrites: async () => {
       const apiBase = process.env.API_URL || 'http://localhost:4000';
       return [
