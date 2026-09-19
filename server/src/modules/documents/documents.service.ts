@@ -171,7 +171,7 @@ export class DocumentsService {
     // Fill any employee fields the reviewer left blank from the live employee record
     const emp = await db.prepare(
       `SELECT u.first_name, u.last_name, u.employee_id, u.designation, u.joining_date,
-              u.dob, u.qualification, u.address_street, u.address_city, u.address_state, u.address_pincode,
+              u.dob, u.qualification, u.gender, u.address_street, u.address_city, u.address_state, u.address_pincode,
               u.father_name, u.phone_number, u.email,
               dept.name AS department_name
        FROM users u LEFT JOIN departments dept ON u.department_id = dept.id WHERE u.id = ?`
@@ -186,6 +186,7 @@ export class DocumentsService {
       ].filter(Boolean);
       const snapshot: Record<string, string> = {
         employeeName: `${emp.first_name} ${emp.last_name}`.trim(),
+        gender: emp.gender ?? '',
         employeeId: emp.employee_id ?? '',
         designation: emp.designation ?? '',
         department: emp.department_name ?? '',

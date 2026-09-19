@@ -39,6 +39,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.0.0",
+    "@playwright/test": "^1.63.0",
     "eslint": "^9",
     "eslint-config-next": "^15.1.0",
     "selfsigned": "^5.5.0"

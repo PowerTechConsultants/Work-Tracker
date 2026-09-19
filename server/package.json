@@ -11,6 +11,7 @@
     "db:migrate": "tsx -e \"import './src/db/index'\"",
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "backup": "tsx src/lib/backup.ts",
     "backup:list": "tsx src/lib/backup.ts list",
     "wipe:operational": "tsx src/scripts/wipe-operational.ts"
@@ -18,8 +19,6 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1124.0",
     "@aws-sdk/s3-request-presigner": "^3.1124.0",
-    "bcrypt": "^6.0.0",
-    "typescript": "^5.5.4",
     "@types/bcrypt": "^6.0.0",
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.17",
@@ -32,6 +31,7 @@
     "@types/nodemailer": "^6.4.15",
     "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.8",
+    "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -48,13 +48,17 @@
     "socket.io": "^4.8.3",
     "swagger-jsdoc": "^6.3.0",
     "swagger-ui-express": "^5.0.1",
+    "typescript": "^5.5.4",
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@types/supertest": "^7.2.1",
     "eslint": "^9.0.0",
     "eslint-config-prettier": "^9.1.0",
     "prettier": "^3.3.3",
+    "supertest": "^7.2.2",
     "tsx": "^4.19.0",
-    "typescript-eslint": "^8.65.0"
+    "typescript-eslint": "^8.65.0",
+    "vitest": "^3.2.7"
   }
 }

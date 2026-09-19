@@ -160,7 +160,7 @@ const forgotPasswordLimiter = rateLimit({
 router.post('/forgot-password', forgotPasswordLimiter, validate(forgotPasswordSchema), async (req: Request, res: Response, next) => {
   try {
     const result = await AuthService.forgotPassword(req.body.email);
-    try { await ActivityLogsService.create('system', 'forgot_password', 'auth', undefined, { email: req.body.email }, req.ip); } catch (e) { console.error('[ActivityLogs] Failed:', e); }
+    try { await ActivityLogsService.create(null, 'forgot_password', 'auth', undefined, { email: req.body.email }, req.ip); } catch (e) { console.error('[ActivityLogs] Failed:', e); }
     res.json(result);
   } catch (err) { next(err); }
 });
