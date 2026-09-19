@@ -10,7 +10,7 @@
     "dev": "concurrently -n server,web -c blue,green \"npm run dev -w server\" \"npm run dev -w web\"",
     "clean": "node -e \"require('fs').rmSync('web/.next',{recursive:true,force:true})\"",
     "build": "npm run build -w server && npm run build -w web && node scripts/package-hostinger.mjs",
-    "start": "node server/dist/src/server.js",
+    "start": "node server.js",
     "lint": "npm run lint -w server && npm run lint -w web",
     "typecheck": "npm run typecheck -w server",
     "setup": "npm run setup -w server",
