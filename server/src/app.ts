@@ -38,8 +38,6 @@ import holidaysRoutes from './modules/holidays/holidays.routes.js';
 import analyticsRoutes from './modules/analytics/analytics.routes.js';
 import systemRoutes from './modules/system/system.routes.js';
 import filesRoutes from './modules/files/files.routes.js';
-import reportTemplatesRoutes from './modules/report-templates/report-templates.routes.js';
-import scheduledReportsRoutes from './modules/scheduled-reports/scheduled-reports.routes.js';
 import securityRoutes from './modules/security/security.routes.js';
 
 // Clean up expired rate limit entries on startup
@@ -189,8 +187,6 @@ export function createApp() {
   app.use(`${api}/analytics`, analyticsRoutes);
   app.use(`${api}/system`, systemRoutes);
   app.use(`${api}/files`, filesRoutes);
-  app.use(`${api}/report-templates`, reportTemplatesRoutes);
-  app.use(`${api}/scheduled-reports`, scheduledReportsRoutes);
   app.use(`${api}/security`, securityRoutes);
 
   // API docs - protected in production, basic auth in dev

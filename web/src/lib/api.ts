@@ -94,22 +94,6 @@ export const analyticsApi = {
   managerDashboard: (managerId: string) => api.get('/analytics/manager-dashboard', { params: { managerId } }),
 };
 
-export const reportTemplatesApi = {
-  list: (params?: any) => api.get('/report-templates', { params }),
-  create: (data: any) => api.post('/report-templates', data),
-  update: (id: string, data: any) => api.patch(`/report-templates/${id}`, data),
-  delete: (id: string) => api.delete(`/report-templates/${id}`),
-};
-
-export const scheduledReportsApi = {
-  list: (params?: any) => api.get('/scheduled-reports', { params }),
-  create: (data: any) => api.post('/scheduled-reports', data),
-  update: (id: string, data: any) => api.patch(`/scheduled-reports/${id}`, data),
-  delete: (id: string) => api.delete(`/scheduled-reports/${id}`),
-  run: (id: string) => api.post(`/scheduled-reports/${id}/run`),
-  results: (id: string) => api.get(`/scheduled-reports/${id}/results`),
-};
-
 export const overtimeApi = {
   getMy: (year: number, month: number) => api.get(`/attendance/overtime/my/${year}/${month}`),
   getAll: (year: number, month: number) => api.get(`/attendance/overtime/${year}/${month}`),

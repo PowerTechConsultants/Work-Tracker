@@ -416,22 +416,6 @@ function drawTitle(doc: jsPDF, title: string, issueDate: string, docNumber: stri
   return y + 10;
 }
 
-function drawParagraph(doc: jsPDF, text: string, y: number): number {
-  const w = doc.internal.pageSize.getWidth();
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10.5);
-  const lines = doc.splitTextToSize(text, w - 28) as string[];
-  for (const line of lines) {
-    if (y > doc.internal.pageSize.getHeight() - 45) {
-      doc.addPage();
-      y = 25;
-    }
-    doc.text(line, 14, y);
-    y += 5.5;
-  }
-  return y;
-}
-
 function drawSignature(doc: jsPDF, issuedBy?: string | null) {
   const pageHeight = doc.internal.pageSize.getHeight();
   const w = doc.internal.pageSize.getWidth();
