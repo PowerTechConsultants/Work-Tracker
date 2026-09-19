@@ -7,9 +7,10 @@ const outputDir = path.join(projectRoot, 'dist');
 const serverBuild = path.join(projectRoot, 'server', 'dist');
 const serverSourceBuild = path.join(serverBuild, 'src');
 const schemaFile = path.join(projectRoot, 'server', 'src', 'db', 'schema.mysql.sql');
+const serverPackageFile = path.join(projectRoot, 'server', 'package.json');
 const webBuild = path.join(projectRoot, 'web', 'out');
 
-for (const requiredPath of [serverSourceBuild, schemaFile, webBuild]) {
+for (const requiredPath of [serverSourceBuild, schemaFile, serverPackageFile, webBuild]) {
   if (!fs.existsSync(requiredPath)) {
     throw new Error(`Missing build output: ${path.relative(projectRoot, requiredPath)}`);
   }
@@ -20,7 +21,15 @@ fs.mkdirSync(outputDir, { recursive: true });
 for (const entry of fs.readdirSync(serverSourceBuild)) {
   fs.cpSync(path.join(serverSourceBuild, entry), path.join(outputDir, entry), { recursive: true });
 }
-fs.writeFileSync(path.join(outputDir, 'package.json'), '{"type":"module"}\n');
+const serverPackage = JSON.parse(fs.readFileSync(serverPackageFile, 'utf8'));
+fs.writeFileSync(path.join(outputDir, 'package.json'), `${JSON.stringify({
+  name: 'employee-work-tracker-runtime',
+  version: serverPackage.version,
+  private: true,
+  type: 'module',
+  scripts: { start: 'node server.js' },
+  dependencies: serverPackage.dependencies,
+}, null, 2)}\n`);
 fs.mkdirSync(path.join(outputDir, 'src', 'db'), { recursive: true });
 fs.copyFileSync(schemaFile, path.join(outputDir, 'src', 'db', 'schema.mysql.sql'));
 fs.cpSync(webBuild, path.join(outputDir, 'web', 'out'), { recursive: true });
