@@ -1,9 +1,9 @@
 import { Server as HttpServer } from 'http';
 import { Server, Socket } from 'socket.io';
-import db from '../db';
-import { verifyAccessToken, type AccessTokenPayload } from './jwt';
-import { isTokenRevoked } from './blacklist';
-import { config } from './config';
+import db from '../db/index.js';
+import { verifyAccessToken, type AccessTokenPayload } from './jwt.js';
+import { isTokenRevoked } from './blacklist.js';
+import { config } from './config.js';
 
 let io: Server | null = null;
 

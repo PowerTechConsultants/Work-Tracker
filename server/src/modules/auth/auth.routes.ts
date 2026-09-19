@@ -1,14 +1,14 @@
 import { Router, Request, Response } from 'express';
-import { validate } from '../../middleware/validate';
-import { authenticate } from '../../middleware/authenticate';
-import { requireRole } from '../../middleware/rbac';
+import { validate } from '../../middleware/validate.js';
+import { authenticate } from '../../middleware/authenticate.js';
+import { requireRole } from '../../middleware/rbac.js';
 import rateLimit from 'express-rate-limit';
-import { RateLimitStore } from '../../lib/rate-limit-store';
-import { ActivityLogsService } from '../activity-logs/activity-logs.service';
-import { loginSchema, registerSchema, changePasswordSchema, forgotPasswordSchema, resetPasswordSchema, twoFactorVerifySchema, twoFactorDisableSchema } from './auth.schema';
-import { AuthService } from './auth.service';
-import { config } from '../../lib/config';
-import { createTOTPSecret, buildTOTPUri } from '../../lib/totp';
+import { RateLimitStore } from '../../lib/rate-limit-store.js';
+import { ActivityLogsService } from '../activity-logs/activity-logs.service.js';
+import { loginSchema, registerSchema, changePasswordSchema, forgotPasswordSchema, resetPasswordSchema, twoFactorVerifySchema, twoFactorDisableSchema } from './auth.schema.js';
+import { AuthService } from './auth.service.js';
+import { config } from '../../lib/config.js';
+import { createTOTPSecret, buildTOTPUri } from '../../lib/totp.js';
 
 const router = Router();
 

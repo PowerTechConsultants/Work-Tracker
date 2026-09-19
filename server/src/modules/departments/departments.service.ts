@@ -1,5 +1,5 @@
-import db, { uuid } from '../../db';
-import { AppError } from '../../lib/app-error';
+import db, { uuid } from '../../db/index.js';
+import { AppError } from '../../lib/app-error.js';
 
 function mapDepartment(d: any) {
   return { id: d.id, name: d.name, description: d.description, managerId: d.manager_id, createdAt: d.created_at, updatedAt: d.updated_at };

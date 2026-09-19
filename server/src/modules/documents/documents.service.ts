@@ -1,8 +1,8 @@
-import db, { uuid } from '../../db';
-import { getIO } from '../../lib/socket';
-import { AppError } from '../../lib/app-error';
-import { documentFieldSchemas, DOC_TYPE_LABELS, DOC_TYPE_CODES, type DocType } from './documents.schema';
-import { sendDocumentReady } from '../../lib/email';
+import db, { uuid } from '../../db/index.js';
+import { getIO } from '../../lib/socket.js';
+import { AppError } from '../../lib/app-error.js';
+import { documentFieldSchemas, DOC_TYPE_LABELS, DOC_TYPE_CODES, type DocType } from './documents.schema.js';
+import { sendDocumentReady } from '../../lib/email.js';
 
 const SELECT = `
   SELECT d.*,

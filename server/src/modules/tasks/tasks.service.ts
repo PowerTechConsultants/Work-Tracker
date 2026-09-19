@@ -1,7 +1,7 @@
-import db, { uuid } from '../../db';
-import { AppError } from '../../lib/app-error';
-import { getISTDate } from '../../lib/time';
-import { sendTaskAssignment } from '../../lib/email';
+import db, { uuid } from '../../db/index.js';
+import { AppError } from '../../lib/app-error.js';
+import { getISTDate } from '../../lib/time.js';
+import { sendTaskAssignment } from '../../lib/email.js';
 
 function mapTask(t: any) {
   return {

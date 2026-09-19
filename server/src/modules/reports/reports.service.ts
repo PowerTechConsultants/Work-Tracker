@@ -1,5 +1,5 @@
-import db, { uuid } from '../../db';
-import { AppError } from '../../lib/app-error';
+import db, { uuid } from '../../db/index.js';
+import { AppError } from '../../lib/app-error.js';
 
 function mapReport(r: any) {
   return {

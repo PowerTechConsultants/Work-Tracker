@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { cache } from '../lib/cache';
+import { cache } from '../lib/cache.js';
 
 interface ApiCacheOptions {
   ttl: number;

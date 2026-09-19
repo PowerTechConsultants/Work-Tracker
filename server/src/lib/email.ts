@@ -1,6 +1,6 @@
 import nodemailer from 'nodemailer';
-import { config } from './config';
-import db, { uuid } from '../db';
+import { config } from './config.js';
+import db, { uuid } from '../db/index.js';
 
 let transporter: nodemailer.Transporter | null = null;
 

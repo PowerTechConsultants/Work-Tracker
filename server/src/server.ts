@@ -2,15 +2,15 @@ import http from 'http';
 import https from 'https';
 import fs from 'fs';
 import path from 'path';
-import { createApp } from './app';
-import { config } from './lib/config';
-import { initializeSocket, closeSocket } from './lib/socket';
-import { startAutoAbsentScheduler, stopAutoAbsentScheduler } from './lib/auto-absent';
-import { runAnnualLeaveReset } from './lib/leave-reset';
-import { cleanupExpiredBlacklistEntries } from './lib/blacklist';
-import { ensureAdminBootstrap } from './db/bootstrap';
-import db, { pool } from './db';
-import { AttendanceService } from './modules/attendance/attendance.service';
+import { createApp } from './app.js';
+import { config } from './lib/config.js';
+import { initializeSocket, closeSocket } from './lib/socket.js';
+import { startAutoAbsentScheduler, stopAutoAbsentScheduler } from './lib/auto-absent.js';
+import { runAnnualLeaveReset } from './lib/leave-reset.js';
+import { cleanupExpiredBlacklistEntries } from './lib/blacklist.js';
+import { ensureAdminBootstrap } from './db/bootstrap.js';
+import db, { pool } from './db/index.js';
+import { AttendanceService } from './modules/attendance/attendance.service.js';
 
 await ensureAdminBootstrap();
 
@@ -30,7 +30,7 @@ if (enableHttps) {
   if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
     if (!fs.existsSync(certDir)) fs.mkdirSync(certDir, { recursive: true });
     try {
-      const cert = await import('./lib/cert');
+      const cert = await import('./lib/cert.js');
       cert.generateSelfSignedCert(certDir);
     } catch (e) {
       console.warn('[SERVER] Failed to generate SSL certificate:', e);

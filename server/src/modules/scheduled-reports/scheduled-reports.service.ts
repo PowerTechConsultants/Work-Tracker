@@ -1,7 +1,7 @@
-import db, { uuid } from '../../db';
-import { AppError } from '../../lib/app-error';
-import { getISTDate } from '../../lib/time';
-import type { CreateScheduleInput, UpdateScheduleInput, ListSchedulesInput } from './scheduled-reports.schema';
+import db, { uuid } from '../../db/index.js';
+import { AppError } from '../../lib/app-error.js';
+import { getISTDate } from '../../lib/time.js';
+import type { CreateScheduleInput, UpdateScheduleInput, ListSchedulesInput } from './scheduled-reports.schema.js';
 
 function mapSchedule(r: any) {
   let recipients: any[] = [];

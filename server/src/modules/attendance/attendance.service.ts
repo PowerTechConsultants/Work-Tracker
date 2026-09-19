@@ -1,8 +1,8 @@
-import db, { uuid } from '../../db';
-import { getISTDate, getISTNow, parseUTC } from '../../lib/time';
-import { getIO } from '../../lib/socket';
-import { cache } from '../../lib/cache';
-import { AppError } from '../../lib/app-error';
+import db, { uuid } from '../../db/index.js';
+import { getISTDate, getISTNow, parseUTC } from '../../lib/time.js';
+import { getIO } from '../../lib/socket.js';
+import { cache } from '../../lib/cache.js';
+import { AppError } from '../../lib/app-error.js';
 
 const HALF_DAY_THRESHOLD = 4;
 

@@ -1,9 +1,9 @@
-import db, { uuid } from '../../db';
-import { getIO } from '../../lib/socket';
-import { getISTDate, isSundayIST, parseUTC } from '../../lib/time';
-import { cache } from '../../lib/cache';
-import { AppError } from '../../lib/app-error';
-import { sendLeaveNotification } from '../../lib/email';
+import db, { uuid } from '../../db/index.js';
+import { getIO } from '../../lib/socket.js';
+import { getISTDate, isSundayIST, parseUTC } from '../../lib/time.js';
+import { cache } from '../../lib/cache.js';
+import { AppError } from '../../lib/app-error.js';
+import { sendLeaveNotification } from '../../lib/email.js';
 
 const LEAVE_BALANCES: Record<'casual' | 'sick' | 'proposal', number> = { casual: 8, sick: 8, proposal: 16 };
 const ANNUAL_LEAVE_ALLOWANCE = LEAVE_BALANCES.casual + LEAVE_BALANCES.sick + LEAVE_BALANCES.proposal; // 32 days per year

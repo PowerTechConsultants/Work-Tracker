@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { config } from './config';
+import { config } from './config.js';
 
 export interface StorageProvider {
   upload(key: string, buffer: Buffer, mimeType: string): Promise<{ url: string; size: number }>;

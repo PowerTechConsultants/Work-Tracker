@@ -1,10 +1,10 @@
 import bcrypt from 'bcrypt';
-import db, { uuid } from '../../db';
-import { AppError } from '../../lib/app-error';
-import { bcryptBreaker } from '../../lib/circuit-breaker';
-import { invalidateUserCache } from '../../middleware/authenticate';
-import type { CreateUserInput, UpdateUserInput, ListUsersInput } from './users.schema';
-import { getPasswordPolicy, validatePassword } from '../../lib/password-policy';
+import db, { uuid } from '../../db/index.js';
+import { AppError } from '../../lib/app-error.js';
+import { bcryptBreaker } from '../../lib/circuit-breaker.js';
+import { invalidateUserCache } from '../../middleware/authenticate.js';
+import type { CreateUserInput, UpdateUserInput, ListUsersInput } from './users.schema.js';
+import { getPasswordPolicy, validatePassword } from '../../lib/password-policy.js';
 
 const SALT_ROUNDS = 12;
 

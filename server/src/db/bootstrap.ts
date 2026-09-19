@@ -1,5 +1,5 @@
 import bcrypt from 'bcrypt';
-import db, { uuid } from './index';
+import db, { uuid } from './index.js';
 
 export async function ensureAdminBootstrap() {
   const adminEmail = process.env.ADMIN_EMAIL;

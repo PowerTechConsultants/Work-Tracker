@@ -1,5 +1,5 @@
-import db from '../../db';
-import { getISTDate, getISTNow } from '../../lib/time';
+import db from '../../db/index.js';
+import { getISTDate, getISTNow } from '../../lib/time.js';
 
 export class AnalyticsService {
   static async attendanceTrends(year: number, month: number) {

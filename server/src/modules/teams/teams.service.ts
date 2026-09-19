@@ -1,5 +1,5 @@
-import db from '../../db';
-import { AppError } from '../../lib/app-error';
+import db from '../../db/index.js';
+import { AppError } from '../../lib/app-error.js';
 
 export class TeamsService {
   static async list() {

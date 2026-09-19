@@ -1,10 +1,10 @@
 import { Router, Request, Response } from 'express';
-import db from '../../db';
-import { authenticate } from '../../middleware/authenticate';
-import { requireRole } from '../../middleware/rbac';
-import { getPasswordPolicy, updatePasswordPolicy } from '../../lib/password-policy';
+import db from '../../db/index.js';
+import { authenticate } from '../../middleware/authenticate.js';
+import { requireRole } from '../../middleware/rbac.js';
+import { getPasswordPolicy, updatePasswordPolicy } from '../../lib/password-policy.js';
 import { z } from 'zod';
-import { validate } from '../../middleware/validate';
+import { validate } from '../../middleware/validate.js';
 
 const router = Router();
 

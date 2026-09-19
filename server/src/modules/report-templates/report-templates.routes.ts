@@ -1,9 +1,9 @@
 import { Router, Request, Response } from 'express';
-import { validate, requireUuid } from '../../middleware/validate';
-import { authenticate } from '../../middleware/authenticate';
-import { requireRole } from '../../middleware/rbac';
-import { createTemplateSchema, updateTemplateSchema, listTemplatesSchema } from './report-templates.schema';
-import { ReportTemplatesService } from './report-templates.service';
+import { validate, requireUuid } from '../../middleware/validate.js';
+import { authenticate } from '../../middleware/authenticate.js';
+import { requireRole } from '../../middleware/rbac.js';
+import { createTemplateSchema, updateTemplateSchema, listTemplatesSchema } from './report-templates.schema.js';
+import { ReportTemplatesService } from './report-templates.service.js';
 
 const router = Router();
 

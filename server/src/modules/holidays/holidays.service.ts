@@ -1,7 +1,7 @@
-import db, { uuid } from '../../db';
-import { getIO } from '../../lib/socket';
-import { cache } from '../../lib/cache';
-import { AppError } from '../../lib/app-error';
+import db, { uuid } from '../../db/index.js';
+import { getIO } from '../../lib/socket.js';
+import { cache } from '../../lib/cache.js';
+import { AppError } from '../../lib/app-error.js';
 
 const PROTECTED_STATUSES = "('present','work_end','on_break','half_day','leave','remote')";
 

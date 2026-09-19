@@ -1,12 +1,12 @@
 import { Router, Request, Response } from 'express';
-import { validate, requireUuid } from '../../middleware/validate';
-import { authenticate } from '../../middleware/authenticate';
-import { requireRole } from '../../middleware/rbac';
-import { apiCache } from '../../middleware/api-cache';
-import { cache } from '../../lib/cache';
-import { createUserSchema, deleteUserSchema, updateUserSchema, listUsersSchema } from './users.schema';
-import { UsersService } from './users.service';
-import { ActivityLogsService } from '../activity-logs/activity-logs.service';
+import { validate, requireUuid } from '../../middleware/validate.js';
+import { authenticate } from '../../middleware/authenticate.js';
+import { requireRole } from '../../middleware/rbac.js';
+import { apiCache } from '../../middleware/api-cache.js';
+import { cache } from '../../lib/cache.js';
+import { createUserSchema, deleteUserSchema, updateUserSchema, listUsersSchema } from './users.schema.js';
+import { UsersService } from './users.service.js';
+import { ActivityLogsService } from '../activity-logs/activity-logs.service.js';
 
 const router = Router();
 

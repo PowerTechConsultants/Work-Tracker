@@ -1,9 +1,9 @@
 import { Router, Request, Response } from 'express';
-import { validate, requireUuid } from '../../middleware/validate';
-import { authenticate } from '../../middleware/authenticate';
-import { requireRole } from '../../middleware/rbac';
-import { createScheduleSchema, updateScheduleSchema, listSchedulesSchema } from './scheduled-reports.schema';
-import { ScheduledReportsService } from './scheduled-reports.service';
+import { validate, requireUuid } from '../../middleware/validate.js';
+import { authenticate } from '../../middleware/authenticate.js';
+import { requireRole } from '../../middleware/rbac.js';
+import { createScheduleSchema, updateScheduleSchema, listSchedulesSchema } from './scheduled-reports.schema.js';
+import { ScheduledReportsService } from './scheduled-reports.service.js';
 
 const router = Router();
 

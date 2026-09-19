@@ -1,6 +1,6 @@
-import db, { uuid } from '../../db';
-import { AppError } from '../../lib/app-error';
-import type { CreateTemplateInput, UpdateTemplateInput, ListTemplatesInput } from './report-templates.schema';
+import db, { uuid } from '../../db/index.js';
+import { AppError } from '../../lib/app-error.js';
+import type { CreateTemplateInput, UpdateTemplateInput, ListTemplatesInput } from './report-templates.schema.js';
 
 function mapTemplate(r: any) {
   let fields: any[] = [];
