@@ -227,6 +227,7 @@ export function createApp() {
       const webOutCandidates = [
         path.resolve(process.cwd(), 'web', 'out'),
         path.resolve(process.cwd(), '..', 'web', 'out'),
+        path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../web/out'),
         path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../web/out'),
       ];
       const webOut = webOutCandidates.find((candidate) => fs.existsSync(candidate));
