@@ -18,31 +18,35 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react', '@tanstack/react-query'],
   },
-  async rewrites() {
-    const apiBase = process.env.API_URL || 'http://localhost:4000';
-    return [
-      {
-        source: '/api/:path*',
-        destination: `${apiBase}/api/:path*`,
-      },
-      {
-        source: '/socket.io/:path*',
-        destination: `${apiBase}/socket.io/:path*`,
-      },
-      {
-        source: '/health',
-        destination: `${apiBase}/health`,
-      },
-      {
-        source: '/ready',
-        destination: `${apiBase}/ready`,
-      },
-      {
-        source: '/api-docs/:path*',
-        destination: `${apiBase}/api-docs/:path*`,
-      },
-    ];
-  },
+  // HOSTINGER=true serves /api same-origin via server.js — omit rewrites entirely,
+  // since Next flags rewrites+export combos and trips deploy checks
+  ...(process.env.HOSTINGER === 'true' ? {} : {
+    rewrites: async () => {
+      const apiBase = process.env.API_URL || 'http://localhost:4000';
+      return [
+        {
+          source: '/api/:path*',
+          destination: `${apiBase}/api/:path*`,
+        },
+        {
+          source: '/socket.io/:path*',
+          destination: `${apiBase}/socket.io/:path*`,
+        },
+        {
+          source: '/health',
+          destination: `${apiBase}/health`,
+        },
+        {
+          source: '/ready',
+          destination: `${apiBase}/ready`,
+        },
+        {
+          source: '/api-docs/:path*',
+          destination: `${apiBase}/api-docs/:path*`,
+        },
+      ];
+    },
+  }),
   webpack: (config, { dev, isServer }) => {
     if (!dev && !isServer) {
       config.optimization = {
