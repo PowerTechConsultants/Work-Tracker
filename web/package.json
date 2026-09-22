@@ -2,6 +2,7 @@
   "name": "employee-work-tracker-web",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "vite --port 3000",
     "dev:https": "node scripts/gen-cert.mjs && vite --port 3000 --host",
