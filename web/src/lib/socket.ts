@@ -23,8 +23,8 @@ export const initializeSocket = (token: string) => {
     (typeof window !== 'undefined'
       ? (isProduction()
         ? window.location.origin
-        : `${window.location.protocol}//${window.location.hostname}:4000`)
-      : 'http://localhost:4000');
+        : `${window.location.protocol}//${window.location.hostname}:4001`)
+      : 'http://localhost:4001');
 
   if (socket && (currentToken !== token || socketUrl !== API_URL)) {
     socket.close();
