@@ -8,15 +8,15 @@ A production-grade full-stack workforce management application for small to medi
 
 | Layer | Technology |
 |-------|-----------|
-| **Backend** | Node.js, Express 4.x, TypeScript, mysql2 (raw SQL) |
-| **Frontend** | Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS 4 |
+| **Backend** | Node.js 22+, Express 4.x, TypeScript, mysql2 (raw SQL) |
+| **Frontend** | React 19 + Vite 8, React Router 7, TypeScript, Tailwind CSS 4 |
 | **Database** | MySQL 8.0 with InnoDB |
 | **Auth** | JWT access + refresh tokens (httpOnly cookies), bcrypt (12 rounds) |
 | **Real-time** | Socket.IO for live notifications |
 | **Charts** | Recharts for analytics dashboards |
 | **State** | TanStack React Query v5, Axios with interceptors |
-| **Testing** | Vitest (frontend only) |
-| **Deployment** | Docker, PM2, Nginx reverse proxy |
+| **Testing** | Vitest (server 37 + web 38 tests) |
+| **Deployment** | Hostinger Shared (Node 22, `HOSTINGER=true` single-process) / Docker / PM2 |
 
 ## Quick Start
 
@@ -57,12 +57,12 @@ employee-work-tracker/
 │   ├── tests/                    # Frontend Vitest tests
 │   ├── load-tests/               # Artillery load tests
 │   └── package.json
-├── web/                          # Frontend (Next.js 15 + React 19)
+├── web/                          # Frontend (React 19 + Vite 8)
 │   ├── src/
-│   │   ├── app/                  # 19 page routes (App Router)
+│   │   ├── pages/                # 22 page routes (React Router)
 │   │   ├── components/           # Shared UI components (ErrorBoundary, Toast, ConfirmDialog)
 │   │   ├── context/              # AuthContext with JWT refresh
-│   │   ├── lib/                  # API client, socket, utils, location
+│   │   ├── lib/                  # API client, socket, utils, location, env
 │   │   └── types/                # TypeScript interfaces for API responses
 │   └── package.json
 ├── .github/workflows/ci.yml     # CI/CD pipeline
@@ -138,20 +138,21 @@ employee-work-tracker/
 
 | Command | Description |
 |---------|-------------|
-| `npm run dev` | Dev server with hot reload |
-| `npm run build` | TypeScript compilation |
-| `npm test` | Frontend Vitest tests only (no backend tests) |
+| `npm run dev` | Dev server with hot reload (`tsx watch src/server.ts` on :4001) |
+| `npm run build` | TypeScript compilation (`tsc -p tsconfig.json`) |
+| `npm test` | Vitest (37 tests, 7 files) |
 | `npm run test:watch` | Watch mode |
 | `npm run test:coverage` | Coverage report |
-| `npm run lint` | ESLint |
+| `npm run lint` | ESLint (`src/**/*.ts`) |
 | `npm run typecheck` | TypeScript check |
 
 ### Frontend (`web/`)
 
 | Command | Description |
 |---------|-------------|
-| `npm run dev` | Next.js dev server |
-| `npm run build` | Production build |
+| `npm run dev` | Vite dev server (http://localhost:3000, proxy /api → :4001) |
+| `npm run dev:https` | Vite HTTPS for LAN geolocation (trust `web/certs/`) |
+| `npm run build` | Production build (`web/out`, used by Hostinger) |
 | `npm run lint` | ESLint |
 
 ## API Authentication
@@ -186,24 +187,28 @@ npx artillery run load-tests/auth-load-test.yml
 
 ## Deployment
 
+### Hostinger (production)
+
+```bash
+npm run build   # tsc + vite build + node scripts/package-hostinger.mjs → dist/
+# Upload dist/ (server) + web/out/.htaccess (Permissions-Policy geolocation) to Hostinger
+# Env: HOSTINGER=true, NODE_ENV=production, CORS_ORIGIN=https://power-tech.group, APP_URL=https://power-tech.group, TRUST_PROXY=1, COOKIE_SECURE=true
+# Email optional: leave SMTP_* empty (EMAIL_ENABLED auto false) — notifications are primary
+```
+
 ### Docker
 
 ```bash
-cd server
-docker-compose up -d
+docker-compose up -d   # server :4001, web :3000, db :3306, health http://localhost:4001/health
 ```
 
 ### PM2
 
 ```bash
-pm2 start ecosystem.config.js
+pm2 start ecosystem.config.js   # PORT 4001 (dev) / production
 pm2 save
 pm2 startup
 ```
-
-### Nginx
-
-See `deployment.md` for full Nginx reverse proxy configuration with SSL.
 
 ## Environment Variables
 
