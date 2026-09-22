@@ -194,11 +194,14 @@ export default function PlansPage() {
                   {p.status === 'draft' && (
                     <button onClick={() => submitPlan.mutate(p.id)} disabled={submitPlan.isPending} className="rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 text-xs font-medium transition disabled:opacity-50 flex items-center gap-1">{submitPlan.isPending && <Loader2 className="h-3 w-3 animate-spin" />}Submit</button>
                   )}
-                  {isAdmin && p.status === 'submitted' && (
+                  {isAdmin && p.status === 'submitted' && p.userId !== user?.id && (p as any).user_id !== user?.id && (
                     <>
                       <button onClick={() => reviewPlan.mutate({ id: p.id, status: 'approved' })} disabled={reviewPlan.isPending} className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 text-xs font-medium transition disabled:opacity-50">Approve</button>
                       <button onClick={() => reviewPlan.mutate({ id: p.id, status: 'rejected' })} disabled={reviewPlan.isPending} className="rounded-lg bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 text-xs font-medium transition disabled:opacity-50">Reject</button>
                     </>
+                  )}
+                  {isAdmin && p.status === 'submitted' && (p.userId === user?.id || (p as any).user_id === user?.id) && (
+                    <span className="text-xs text-slate-500 italic px-2 py-1.5">Awaiting other reviewer</span>
                   )}
                   {isAdmin && (
                     <button onClick={() => deletePlan.mutate(p.id)} className="text-slate-400 hover:text-rose-400 transition p-1.5 rounded-lg hover:bg-rose-500/10">
