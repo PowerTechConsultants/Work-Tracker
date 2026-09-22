@@ -36,7 +36,7 @@ export default function EmployeeDatabasePage() {
   });
 
   const deptsQuery = useQuery({
-    queryKey: ['empdb-departments'],
+    queryKey: ['departments'],
     queryFn: async () => (await api.get('/departments')).data,
     enabled: !loading && !!user && isHrAdmin,
   });

@@ -63,8 +63,9 @@ export default function FilesPage() {
   const confirmCtx = useConfirm();
   const canDelete = user?.role === 'director' || user?.role === 'hr';
 
-  const params: Record<string, any> = { limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE };
-  if (typeFilter !== 'all') params.type = typeFilter;
+  const MIME_PREFIX: Record<string, string> = { image: 'image/', document: 'application/' };
+  const params: Record<string, any> = { limit: PAGE_SIZE, page };
+  if (typeFilter === 'image' || typeFilter === 'document') params.mimeType = MIME_PREFIX[typeFilter];
 
   const { data, isLoading } = useQuery({
     queryKey: ['files', page, typeFilter],
@@ -72,7 +73,14 @@ export default function FilesPage() {
   });
 
   const rawFiles: any[] = data?.files ?? data ?? [];
-  const files: FileRecord[] = rawFiles.map((f: any) => ({
+  // 'other' has no server-side prefix — filter client-side
+  const visibleFiles = typeFilter === 'other'
+    ? rawFiles.filter((f: any) => {
+        const m = String(f.mimeType ?? f.mimetype ?? '');
+        return !m.startsWith('image/') && !m.startsWith('application/');
+      })
+    : rawFiles;
+  const files: FileRecord[] = visibleFiles.map((f: any) => ({
     id: f.id,
     originalName: f.originalName ?? f.filename ?? '',
     mimetype: f.mimeType ?? f.mimetype ?? '',

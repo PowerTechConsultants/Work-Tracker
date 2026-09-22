@@ -95,7 +95,7 @@ export default function LeavesPage() {
   });
   const { data: balance } = useQuery({ queryKey: ['leaveBal'], queryFn: async () => (await api.get('/leaves/balance')).data, enabled: !loading && !!user });
   const totalRemaining = (balance?.totalAvailable ?? balance?.totalBalance ?? 0) - (balance?.totalUsed ?? 0);
-  const { data: holidaysRes } = useQuery({ queryKey: ['holidays'], queryFn: async () => (await api.get('/holidays', { params: { limit: 100 } })).data, enabled: !loading && !!user });
+  const { data: holidaysRes } = useQuery({ queryKey: ['holidays', 100], queryFn: async () => (await api.get('/holidays', { params: { limit: 100 } })).data, enabled: !loading && !!user });
   const holidays = useMemo(() => holidaysRes?.holidays ?? [], [holidaysRes]);
   const todayIST = getTodayIST();
 
@@ -199,7 +199,7 @@ export default function LeavesPage() {
   }, [balance, form.type, daysRequested]);
 
   useEffect(() => {
-    const handler = () => qc.invalidateQueries({ queryKey: ['leaves'] });
+    const handler = () => { qc.invalidateQueries({ queryKey: ['leaves'] }); qc.invalidateQueries({ queryKey: ['leaveBal'] }); };
     const holidayHandler = () => qc.invalidateQueries({ queryKey: ['holidays'] });
     return listenOnSocket({
       'leave:applied': handler,

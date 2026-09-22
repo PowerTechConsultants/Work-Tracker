@@ -28,14 +28,14 @@ export default function HolidaysPage() {
   const [showExport, setShowExport] = useState(false);
 
   const { data: holidaysRes, isLoading } = useQuery({
-    queryKey: ['holidays'],
+    queryKey: ['holidays', 50],
     queryFn: async () => (await api.get('/holidays', { params: { limit: 50 } })).data,
     enabled: !loading && !!user,
   });
   const holidays = holidaysRes?.holidays ?? holidaysRes;
 
   const { data: users } = useQuery({
-    queryKey: ['usersList'],
+    queryKey: ['usersList', 200],
     queryFn: async () => (await api.get('/users?limit=200')).data,
     enabled: !loading && !!user && !form.allUsers,
     retry: false,

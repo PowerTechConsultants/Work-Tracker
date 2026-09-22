@@ -26,6 +26,7 @@ export default defineConfig({
   },
   server: {
     port: 3000,
+    https: httpsOptions,
     // Local dev parity with the old Next.js rewrites: forward API + socket
     // traffic to the Express server. VITE_API_PORT overrides the target port
     // (E2E uses 4001 to avoid clashing with other local services on 4000).

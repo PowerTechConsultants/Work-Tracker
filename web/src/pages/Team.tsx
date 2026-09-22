@@ -37,7 +37,7 @@ export default function TeamPage() {
     queryFn: async () => (await api.get(isAdmin ? '/teams' : '/teams/mine', { params: { limit: 50 } })).data,
     enabled: !loading && !!user,
   });
-  const { data: users } = useQuery({ queryKey: ['usersList'], queryFn: async () => (await api.get('/users?limit=100')).data, enabled: !loading && !!user && isAdmin });
+  const { data: users } = useQuery({ queryKey: ['usersList', 100], queryFn: async () => (await api.get('/users?limit=100')).data, enabled: !loading && !!user && isAdmin });
 
   const teamForTasks = showTasks ? data?.find((t: any) => t.teamName === showTasks) : null;
   const { data: teamTasks } = useQuery({
@@ -70,7 +70,7 @@ export default function TeamPage() {
       const prev = qc.getQueryData(['teams']);
       qc.setQueryData(['teams'], (old: any) => {
         if (!Array.isArray(old)) return old;
-        const uData = qc.getQueryData(['usersList']) as any;
+        const uData = qc.getQueryData(['usersList', 100]) as any;
         const userMap = new Map((uData?.users ?? []).map((u: any) => [u.id, u]));
         return old.map((team: any) => {
           if (team.teamName !== teamName) return team;

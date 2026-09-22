@@ -93,6 +93,29 @@ export const getPronoun = (gender?: unknown): { subject: string; possessive: str
   return { subject: 'He', possessive: 'his', object: 'him' };
 };
 
+// "S/o Mr. X" for sons, "D/o Mr. X" for daughters. The parent's own
+// salutation is kept when present, otherwise defaults to Mr. (father).
+// Never derives the parent's salutation from the employee's gender.
+export const formatParentRelation = (gender?: unknown, parentName?: unknown): string => {
+  const raw = String(parentName || '').trim();
+  if (!raw) return '';
+  const g = String(gender || '').toLowerCase();
+  const relation = g === 'female' ? 'D/o' : 'S/o';
+  const hasPrefix = raw.startsWith('Mr.') || raw.startsWith('Ms.') || raw.startsWith('Mrs.') || raw.startsWith('Mx.');
+  return `, ${relation} ${hasPrefix ? raw : `Mr. ${raw}`}`;
+};
+
+// "One month" / "Two months" from internship date range (defaults to One month).
+export const formatInternshipDuration = (from?: unknown, to?: unknown): string => {
+  const fromD = new Date(String(from || ''));
+  const toD = new Date(String(to || ''));
+  if (isNaN(fromD.getTime()) || isNaN(toD.getTime())) return 'One month';
+  const months = Math.max(1, (toD.getFullYear() - fromD.getFullYear()) * 12 + (toD.getMonth() - fromD.getMonth()) + 1);
+  if (months === 1) return 'One month';
+  const words = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve'];
+  return `${words[months] ?? String(months)} months`;
+};
+
 export const DEFAULT_APPOINTMENT_TERMS = (salary = 'Rs. 6000/-', hours = '8 hours per day') => [
   `The students shall be paid monthly Salary of ${salary.startsWith('Rs.') ? salary : `Rs. ${salary}/-`}`,
   `You will be expected to work ${hours}`,
@@ -1006,9 +1029,7 @@ function buildExperienceCertificate(doc: jsPDF, input: DocumentPdfInput) {
 
   const rawName = String(f.employeeName || 'Employee').trim();
   const salutedName = rawName.startsWith('Mr.') || rawName.startsWith('Ms.') || rawName.startsWith('Mrs.') || rawName.startsWith('Mx.') ? rawName : `${getSalutation(f.gender)} ${rawName}`;
-  const fatherStr = f.fatherName
-    ? `, S/o ${String(f.fatherName).startsWith('Mr.') || String(f.fatherName).startsWith('Ms.') || String(f.fatherName).startsWith('Mx.') ? f.fatherName : `${getSalutation(f.gender)} ${f.fatherName}`}`
-    : '';
+  const fatherStr = formatParentRelation(f.gender, f.fatherName);
   const addrStr = f.permanentAddress
     ? ` residing at ${String(f.permanentAddress).replace(/\n+/g, ', ')}`
     : '';
@@ -1153,16 +1174,18 @@ function buildInternshipCertificate(doc: jsPDF, input: DocumentPdfInput) {
   doc.setFontSize(9.5);
   
   // Build detailed internship certificate text matching actual format
-  const internName = f.internName || '-';
+  const rawInternName = String(f.internName || '-').trim();
+  const internName = rawInternName.startsWith('Mr.') || rawInternName.startsWith('Ms.') || rawInternName.startsWith('Mrs.') || rawInternName.startsWith('Mx.') ? rawInternName : `${getSalutation(f.gender)} ${rawInternName}`;
   const institution = f.institution || '-';
   const regNumber = f.registrationNumber ? ` bearing Registration No - ${f.registrationNumber}` : '';
-  const fatherName = f.fatherName ? `, S/o ${f.fatherName}` : '';
-  const domain = f.domain || '-';
+  const fatherName = formatParentRelation(f.gender, f.fatherName);
+  const domain = f.domain ? ` in the domain of ${String(f.domain).trim()}` : '';
   
   // Use DD.MM.YYYY format for internship dates
   const internshipPeriod = fmtDateRangeDDMMYYYY(f.internshipFrom, f.internshipTo);
+  const durationText = formatInternshipDuration(f.internshipFrom, f.internshipTo);
   
-  const introText = `This is to certify that ${getSalutation(f.gender)} ${internName}, a student of ${institution}${regNumber}${fatherName} has served as a full-time intern in our Company Power Tech Consultants, for a period of One month i.e. from ${internshipPeriod}.`;
+  const introText = `This is to certify that ${internName}, a student of ${institution}${regNumber}${fatherName} has served as a full-time intern${domain} in our Company Power Tech Consultants, for a period of ${durationText} i.e. from ${internshipPeriod}.`;
   
   const introLines = doc.splitTextToSize(introText, contentW) as string[];
   for (const line of introLines) {
@@ -1178,7 +1201,7 @@ function buildInternshipCertificate(doc: jsPDF, input: DocumentPdfInput) {
   // Performance evaluation text
   const perfText = f.completionRemark && String(f.completionRemark).trim()
     ? String(f.completionRemark)
-    : `${getPronoun(f.gender).possessive} contribution is quite valuable for the company. ${getPronoun(f.gender).possessive} interpersonal skills are outstanding and ${getPronoun(f.gender).subject.toLowerCase()} has been very helpful to the company. ${getPronoun(f.gender).subject} is sincere, hardworking and ${getPronoun(f.gender).possessive} conduct is good.`;
+    : `${getPronoun(f.gender).possessive} contribution is quite valuable for the company. ${getPronoun(f.gender).possessive} interpersonal skills are outstanding and ${getPronoun(f.gender).subject} has been very helpful to the company. ${getPronoun(f.gender).subject} is sincere, hardworking and ${getPronoun(f.gender).possessive} conduct is good.`;
   
   const perfLines = doc.splitTextToSize(perfText, contentW) as string[];
   for (const line of perfLines) {
@@ -1921,9 +1944,7 @@ function docxExperienceCertificate(f: Record<string, unknown>, docNumber: string
 
   const rawName = String(f.employeeName || 'Employee').trim();
   const salutedName = rawName.startsWith('Mr.') || rawName.startsWith('Ms.') || rawName.startsWith('Mrs.') || rawName.startsWith('Mx.') ? rawName : `${getSalutation(f.gender)} ${rawName}`;
-  const fatherStr = f.fatherName
-    ? `, S/o ${String(f.fatherName).startsWith('Mr.') || String(f.fatherName).startsWith('Ms.') || String(f.fatherName).startsWith('Mx.') ? f.fatherName : `${getSalutation(f.gender)} ${f.fatherName}`}`
-    : '';
+  const fatherStr = formatParentRelation(f.gender, f.fatherName);
   const addrStr = f.permanentAddress
     ? ` residing at ${String(f.permanentAddress).replace(/\n+/g, ', ')}`
     : '';
@@ -2013,18 +2034,19 @@ function docxInternshipCertificate(f: Record<string, unknown>, docNumber: string
   });
 
   // Build detailed internship certificate text matching actual format
-  const internName = f.internName || '-';
+  const rawInternName = String(f.internName || '-').trim();
+  const docxInternName = rawInternName.startsWith('Mr.') || rawInternName.startsWith('Ms.') || rawInternName.startsWith('Mrs.') || rawInternName.startsWith('Mx.') ? rawInternName : `${getSalutation(f.gender)} ${rawInternName}`;
   const institution = f.institution || '-';
   const regNumber = f.registrationNumber ? ` bearing Registration No - ${f.registrationNumber}` : '';
-  const fatherName = f.fatherName ? `, S/o ${f.fatherName}` : '';
-  const domain = f.domain || '-';
+  const fatherName = formatParentRelation(f.gender, f.fatherName);
+  const domain = f.domain ? ` in the domain of ${String(f.domain).trim()}` : '';
   const internshipPeriod = fmtDateRangeDDMMYYYY(f.internshipFrom, f.internshipTo);
 
-  const introText = `This is to certify that ${getSalutation(f.gender)} ${internName}, a student of ${institution}${regNumber}${fatherName} has served as a full-time intern in our Company Power Tech Consultants, for a period of One month i.e. from ${internshipPeriod}.`;
+  const introText = `This is to certify that ${docxInternName}, a student of ${institution}${regNumber}${fatherName} has served as a full-time intern${domain} in our Company Power Tech Consultants, for a period of ${formatInternshipDuration(f.internshipFrom, f.internshipTo)} i.e. from ${internshipPeriod}.`;
 
   const perfText = f.completionRemark && String(f.completionRemark).trim()
     ? String(f.completionRemark)
-    : `${getPronoun(f.gender).possessive} contribution is quite valuable for the company. ${getPronoun(f.gender).possessive} interpersonal skills are outstanding and ${getPronoun(f.gender).subject.toLowerCase()} has been very helpful to the company. ${getPronoun(f.gender).subject} is sincere, hardworking and ${getPronoun(f.gender).possessive} conduct is good.`;
+    : `${getPronoun(f.gender).possessive} contribution is quite valuable for the company. ${getPronoun(f.gender).possessive} interpersonal skills are outstanding and ${getPronoun(f.gender).subject} has been very helpful to the company. ${getPronoun(f.gender).subject} is sincere, hardworking and ${getPronoun(f.gender).possessive} conduct is good.`;
 
   const elements: Paragraph[] = [
     docxP('TO WHOMEVER IT MAY CONCERN', { bold: true, size: 11, align: AlignmentType.CENTER, spacingAfter: 140 }),

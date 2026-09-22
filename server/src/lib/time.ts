@@ -42,17 +42,13 @@ export function parseUTC(dateString: string | Date): Date {
 }
 
 export function getISTNow(): Date {
-  const str = new Intl.DateTimeFormat('en-US', {
-    timeZone: IST_TIMEZONE,
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-    hour12: false,
-  }).format(new Date());
-  const parts = str.match(/(\d{1,2})\/(\d{1,2})\/(\d{4}),\s*(\d{1,2}):(\d{2}):(\d{2})/);
-  if (!parts) return new Date();
-  let h = +parts[4]!;
-  if (h === 24) h = 0;
-  return new Date(+parts[3]!, +parts[1]! - 1, +parts[2]!, h, +parts[5]!, +parts[6]!);
+  // IST wall-clock as a Date, independent of server timezone:
+  // shift the instant so that both local getters (getHours) and UTC
+  // getters (getUTCHours/toISOString) read IST. The old implementation
+  // built `new Date(y,m,d,h,m,s)` in server-local TZ, which broke every
+  // UTC-method caller (e.g. attendance yesterday-fallback) on non-IST servers.
+  const now = new Date();
+  return new Date(now.getTime() + (330 + now.getTimezoneOffset()) * 60000);
 }
 
 export function isISTPast(hours: number, minutes: number): boolean {

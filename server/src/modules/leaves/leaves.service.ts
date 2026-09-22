@@ -211,7 +211,6 @@ export class LeavesService {
       const overlap = await db.prepare("SELECT id FROM leaves WHERE user_id = ? AND status IN ('pending', 'approved') AND NOT (end_date < ? OR start_date > ?)").get(userId, startDate, endDate);
       if (overlap) throw new AppError(409, 'Leave request overlaps with existing leave');
       const id = uuid();
-
       let extra = 0;
       let workingDays: string[] = [];
       if (isAutoApprove) {
@@ -250,12 +249,17 @@ export class LeavesService {
         for (const a of admins) {
           await insertNotif.run(uuid(), a.id, userId, 'Leave Requested', `${input.type} leave request pending review`, 'approval', `/leaves/${id}`);
         }
-        for (const a of admins) {
-          try { await sendLeaveNotification({ id, type: input.type, startDate, endDate, reason: input.reason ?? undefined }, 'submitted', { id: a.id, email: a.email, firstName: a.first_name, lastName: a.last_name }); } catch (e: any) { console.error('[Email] Failed:', e.message); }
-        }
       }
       return mapLeave(await db.prepare('SELECT l.*, u.first_name, u.last_name, u.employee_id FROM leaves l JOIN users u ON l.user_id = u.id WHERE l.id = ?').get(id));
     }))();
+    if (!isAutoApprove) {
+      // Emails AFTER commit: SMTP inside the transaction holds locks during
+      // sending and duplicates mail if the transaction rolls back and retries.
+      const notifyAdmins = (await db.prepare("SELECT id, email, first_name, last_name FROM users WHERE role IN ('director', 'hr')").all()) as any[];
+      for (const a of notifyAdmins) {
+        try { await sendLeaveNotification({ id: leaveRecord.id, type: input.type, startDate, endDate, reason: input.reason ?? undefined }, 'submitted', { id: a.id, email: a.email, firstName: a.first_name, lastName: a.last_name }); } catch (e: any) { console.error('[Email] Failed:', e.message); }
+      }
+    }
 
     if (isAutoApprove) await cache.delByPrefix(`${userId}:/api/v1/leaves/balance`);
 
@@ -414,12 +418,13 @@ export class LeavesService {
 
       await db.prepare('INSERT INTO notifications (id, recipient_id, sender_id, title, message, type, link) VALUES (?, ?, ?, ?, ?, ?, ?)')
         .run(uuid(), leave.user_id, reviewedById, `Leave ${status}`, `Your ${leave.type} leave has been ${status}`, status === 'approved' ? 'success' : 'warning', `/leaves/${id}`);
-
-      const employee = await db.prepare('SELECT id, email, first_name, last_name FROM users WHERE id = ?').get(leave.user_id) as any;
-      if (employee) {
-        try { await sendLeaveNotification({ id: leave.id, type: leave.type, startDate: leave.start_date, endDate: leave.end_date, reason: leave.reason ?? undefined }, status as 'approved' | 'rejected', { id: employee.id, email: employee.email, firstName: employee.first_name, lastName: employee.last_name }); } catch (e: any) { console.error('[Email] Failed:', e.message); }
-      }
     })();
+    // Email AFTER commit: sending inside the transaction holds locks during
+    // SMTP and duplicates the email if the transaction rolls back and retries.
+    const employee = await db.prepare('SELECT id, email, first_name, last_name FROM users WHERE id = ?').get(leave.user_id) as any;
+    if (employee) {
+      try { await sendLeaveNotification({ id: leave.id, type: leave.type, startDate: leave.start_date, endDate: leave.end_date, reason: leave.reason ?? undefined }, status as 'approved' | 'rejected', { id: employee.id, email: employee.email, firstName: employee.first_name, lastName: employee.last_name }); } catch (e: any) { console.error('[Email] Failed:', e.message); }
+    }
     await cache.delByPrefix(`${leave.user_id}:/api/v1/leaves/balance`);
     const updated = mapLeave(await db.prepare('SELECT l.*, u.first_name, u.last_name, u.employee_id FROM leaves l JOIN users u ON l.user_id = u.id WHERE l.id = ?').get(id));
     try { getIO().to(`user:${leave.user_id}`).emit('leave:reviewed', updated); } catch (e) { console.error('[Leaves] Socket emit failed:', e); }

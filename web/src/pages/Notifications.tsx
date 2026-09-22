@@ -18,7 +18,7 @@ interface Notification {
   title: string;
   message: string;
   link?: string;
-  read: boolean;
+  isRead: boolean;
   createdAt: string;
 }
 
@@ -56,9 +56,8 @@ export default function NotificationsPage() {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
 
-  const params: Record<string, any> = { limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE };
+  const params: Record<string, any> = { limit: PAGE_SIZE, page };
   if (filter === 'unread') params.unread = true;
-  if (filter === 'read') params.read = true;
 
   const { data, isLoading } = useQuery({
     queryKey: ['notifications', 'page', page, filter],
@@ -66,7 +65,9 @@ export default function NotificationsPage() {
     enabled: !loading && !!user,
   });
 
-  const notifications: Notification[] = data?.notifications ?? [];
+  const allNotifications: Notification[] = data?.notifications ?? [];
+  // Backend supports only all/unread server-side; 'read' filters client-side
+  const notifications: Notification[] = filter === 'read' ? allNotifications.filter((n) => n.isRead) : allNotifications;
   const total: number = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -120,7 +121,7 @@ export default function NotificationsPage() {
   }, [confirmCtx, qc]);
 
   const handleClick = (n: Notification) => {
-    if (!n.read) markRead(n.id);
+    if (!n.isRead) markRead(n.id);
     if (n.link) navigate(n.link);
   };
 
@@ -187,7 +188,7 @@ export default function NotificationsPage() {
                     key={n.id}
                     onClick={() => handleClick(n)}
                     className={`flex items-start gap-4 px-4 py-4 cursor-pointer transition hover:bg-slate-800/40 ${
-                      !n.read ? 'bg-violet-500/5' : ''
+                      !n.isRead ? 'bg-violet-500/5' : ''
                     }`}
                   >
                     <div className={`flex-shrink-0 h-10 w-10 rounded-xl bg-slate-800 flex items-center justify-center ${color}`}>
@@ -195,11 +196,11 @@ export default function NotificationsPage() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-2">
-                        <p className={`text-sm font-medium ${!n.read ? 'text-white' : 'text-slate-300'}`}>
+                        <p className={`text-sm font-medium ${!n.isRead ? 'text-white' : 'text-slate-300'}`}>
                           {n.title}
                         </p>
                         <div className="flex items-center gap-1 flex-shrink-0">
-                          {!n.read && <span className="h-2 w-2 rounded-full bg-violet-500" />}
+                          {!n.isRead && <span className="h-2 w-2 rounded-full bg-violet-500" />}
                           <span className="text-xs text-slate-600">{timeAgo(n.createdAt)}</span>
                         </div>
                       </div>

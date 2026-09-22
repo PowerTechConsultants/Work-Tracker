@@ -392,6 +392,7 @@ export default function AttendancePage() {
     retry: 0,
     mutationFn: async (loc: { latitude?: number; longitude?: number; accuracy?: number; locationCapturedAt?: string } | null) => (await api.post('/attendance/check-in', { status: 'present', ...(loc ?? {}) })).data,
     onMutate: async (loc) => {
+      setAttError('');
       await qc.cancelQueries({ queryKey: ['todayAtt'] });
       const prev = qc.getQueryData(['todayAtt']);
       qc.setQueryData(['todayAtt'], todayUpdater('present', { login_time: new Date().toISOString(), logout_time: null, pause_minutes: 0, pause_start_time: null, pause_end_time: null, latitude: loc?.latitude, longitude: loc?.longitude, location_accuracy: loc?.accuracy, location_captured_at: loc?.locationCapturedAt }));
@@ -402,13 +403,14 @@ export default function AttendancePage() {
       else qc.setQueryData(['todayAtt'], ctx.prev);
       setAttError(getApiError(e, 'Check-in failed'));
     },
-    onSettled: () => { setAttError(''); qc.invalidateQueries({ predicate: (q) => ['todayAtt', 'attendance', 'monthlySummary', 'todayAll'].includes(q.queryKey[0] as string) }); },
+    onSettled: () => { qc.invalidateQueries({ predicate: (q) => ['todayAtt', 'attendance', 'monthlySummary', 'todayAll'].includes(q.queryKey[0] as string) }); },
   });
 
   const checkOut = useMutation({
     retry: 0,
     mutationFn: async (loc?: { latitude?: number; longitude?: number; accuracy?: number; locationCapturedAt?: string } | null) => (await api.post('/attendance/check-out', loc ?? {})).data,
     onMutate: async (loc) => {
+      setAttError('');
       await qc.cancelQueries({ queryKey: ['todayAtt'] });
       const prev = qc.getQueryData(['todayAtt']);
       qc.setQueryData(['todayAtt'], todayUpdater('work_end', { logout_time: now.toISOString(), working_hours: getDisplayWorkingHours(prev, now), latitude: loc?.latitude, longitude: loc?.longitude, location_accuracy: loc?.accuracy, location_captured_at: loc?.locationCapturedAt }));
@@ -418,7 +420,7 @@ export default function AttendancePage() {
       if (ctx?.prev) qc.setQueryData(['todayAtt'], ctx.prev);
       setAttError(getApiError(e, 'Check-out failed'));
     },
-    onSettled: () => { setAttError(''); qc.invalidateQueries({ predicate: (q) => ['todayAtt', 'attendance', 'monthlySummary', 'todayAll', 'todayEvents'].includes(q.queryKey[0] as string) }); },
+    onSettled: () => { qc.invalidateQueries({ predicate: (q) => ['todayAtt', 'attendance', 'monthlySummary', 'todayAll', 'todayEvents'].includes(q.queryKey[0] as string) }); },
   });
 
   const handleCheckOut = async () => {
@@ -467,6 +469,7 @@ export default function AttendancePage() {
     retry: 0,
     mutationFn: async (loc?: { latitude?: number; longitude?: number; accuracy?: number; locationCapturedAt?: string } | null) => (await api.post('/attendance/pause-start', loc ?? {})).data,
     onMutate: async () => {
+      setAttError('');
       await qc.cancelQueries({ queryKey: ['todayAtt'] });
       const prev = qc.getQueryData(['todayAtt']);
       qc.setQueryData(['todayAtt'], todayUpdater('on_break', { pause_start_time: new Date().toISOString(), pause_end_time: null }));
@@ -476,13 +479,14 @@ export default function AttendancePage() {
       if (ctx?.prev) qc.setQueryData(['todayAtt'], ctx.prev);
       setAttError(getApiError(e, 'Pause failed'));
     },
-    onSettled: () => { setAttError(''); qc.invalidateQueries({ predicate: (q) => ['todayAtt', 'attendance', 'monthlySummary', 'todayAll', 'todayEvents'].includes(q.queryKey[0] as string) }); },
+    onSettled: () => { qc.invalidateQueries({ predicate: (q) => ['todayAtt', 'attendance', 'monthlySummary', 'todayAll', 'todayEvents'].includes(q.queryKey[0] as string) }); },
   });
 
   const endPause = useMutation({
     retry: 0,
     mutationFn: async (loc?: { latitude?: number; longitude?: number; accuracy?: number; locationCapturedAt?: string } | null) => (await api.post('/attendance/pause-end', loc ?? {})).data,
     onMutate: async () => {
+      setAttError('');
       await qc.cancelQueries({ queryKey: ['todayAtt'] });
       const prev = qc.getQueryData(['todayAtt']);
       qc.setQueryData(['todayAtt'], todayUpdater('present', { pause_end_time: new Date().toISOString() }));
@@ -492,7 +496,7 @@ export default function AttendancePage() {
       if (ctx?.prev) qc.setQueryData(['todayAtt'], ctx.prev);
       setAttError(getApiError(e, 'Resume failed'));
     },
-    onSettled: () => { setAttError(''); qc.invalidateQueries({ predicate: (q) => ['todayAtt', 'attendance', 'monthlySummary', 'todayAll', 'todayEvents'].includes(q.queryKey[0] as string) }); },
+    onSettled: () => { qc.invalidateQueries({ predicate: (q) => ['todayAtt', 'attendance', 'monthlySummary', 'todayAll', 'todayEvents'].includes(q.queryKey[0] as string) }); },
   });
 
   const handleStartPause = () => {

@@ -29,7 +29,7 @@ export default function ReportsPage() {
   });
 
   const { data: usersData } = useQuery({
-    queryKey: ['usersList'],
+    queryKey: ['usersList', 100],
     queryFn: async () => (await api.get('/users?limit=100')).data,
     enabled: isAdmin,
     retry: false,
@@ -46,7 +46,7 @@ export default function ReportsPage() {
   });
 
   const createReport = useMutation({
-    mutationFn: async (d: typeof form) => (await api.post('/reports', { workCompletedToday: d.workCompletedToday, currentProgress: Number(d.currentProgress) || 0, pendingWork: d.pendingWork || undefined, blockers: d.blockers || undefined, tomorrowPlan: d.tomorrowPlan || undefined, date: d.date })).data,
+    mutationFn: async (d: typeof form) => (await api.post('/reports', { workCompletedToday: d.workCompletedToday, currentProgress: Number(d.currentProgress) || 0, pendingWork: d.pendingWork || undefined, blockers: d.blockers || undefined, tomorrowPlan: d.tomorrowPlan || undefined, date: new Date(d.date).toISOString() })).data,
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['reports'] }); setShowCreate(false); setForm({ workCompletedToday: '', currentProgress: '' as unknown as number, pendingWork: '', blockers: '', tomorrowPlan: '', date: new Date().toISOString().split('T')[0] }); },
     onError: (e) => setError(getApiError(e, 'Failed')),
   });
@@ -64,7 +64,7 @@ export default function ReportsPage() {
       return { queries };
     },
     onError: (_e, _id, ctx) => { if (ctx?.queries) for (const [key, data] of ctx.queries) qc.setQueryData(key, data); setError('Submit failed'); },
-    onSettled: () => qc.invalidateQueries({ queryKey: ['reports'] }),
+    onSettled: () => { qc.invalidateQueries({ queryKey: ['reports'] }); qc.invalidateQueries({ queryKey: ['reportSlots'] }); },
   });
 
   const reviewReport = useMutation({
@@ -80,12 +80,13 @@ export default function ReportsPage() {
       return { queries };
     },
     onError: (_e, _vars, ctx) => { if (ctx?.queries) for (const [key, data] of ctx.queries) qc.setQueryData(key, data); setError('Review failed'); },
-    onSettled: () => qc.invalidateQueries({ queryKey: ['reports'] }),
+    onSettled: () => { qc.invalidateQueries({ queryKey: ['reports'] }); qc.invalidateQueries({ queryKey: ['reportSlots'] }); },
   });
 
   const deleteReport = useMutation({
     mutationFn: async (id: string) => (await api.delete(`/reports/${id}`)).data,
-    onSettled: () => qc.invalidateQueries({ queryKey: ['reports'] }),
+    onError: (e) => setError(getApiError(e, 'Failed to delete report')),
+    onSettled: () => { qc.invalidateQueries({ queryKey: ['reports'] }); qc.invalidateQueries({ queryKey: ['reportSlots'] }); },
   });
 
   const handleExportEmployee = async (employeeId: string, format: 'csv' | 'xlsx' | 'pdf' = 'xlsx') => {

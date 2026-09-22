@@ -73,7 +73,7 @@ function EmployeeDashboard({ loading, user }: { loading: boolean; user: any }) {
     enabled: !loading,
   });
   const { data: holidaysRes, isLoading: hl, isError: he } = useQuery({
-    queryKey: ['holidays'],
+    queryKey: ['holidays', 100],
     queryFn: async () => (await api.get('/holidays', { params: { limit: 100 } })).data,
     enabled: !loading,
   });
@@ -325,11 +325,18 @@ export default function DashboardPage() {
       qc.invalidateQueries({ queryKey: ['todayAtt'] });
       qc.invalidateQueries({ queryKey: ['taskStats'] });
       qc.invalidateQueries({ queryKey: ['taskStatsAdmin'] });
+      qc.invalidateQueries({ queryKey: ['employeeProgress'] });
+    };
+    const leaveHandler = () => {
+      qc.invalidateQueries({ queryKey: ['leaves'] });
+      qc.invalidateQueries({ queryKey: ['leaveBal'] });
     };
     const holidayHandler = () => qc.invalidateQueries({ queryKey: ['holidays'] });
     return listenOnSocket({
       'attendance:updated': handler,
       'attendance:bulk': handler,
+      'leave:applied': leaveHandler,
+      'leave:reviewed': leaveHandler,
       'holiday:created': holidayHandler,
       'holiday:deleted': holidayHandler,
     });

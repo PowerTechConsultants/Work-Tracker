@@ -31,7 +31,7 @@ export default function UsersPage() {
   const [error, setError] = useState('');
 
   const { data: policyData } = useQuery({
-    queryKey: ['securityPolicy'],
+    queryKey: ['security', 'policy'],
     queryFn: async () => { const res = await apiEndpoints.security.policy(); return res.data; },
     enabled: !!user,
     staleTime: 300000,

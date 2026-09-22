@@ -241,9 +241,9 @@ export class DocumentsService {
       if (doc.doc_type === 'appointment_letter') {
         dn = `SSPT/HR/${year}/${String(seq + 1).padStart(4, '0')}`;
       } else if (doc.doc_type === 'leaving_certificate') {
-        dn = `SSPTPL/HR /${year.toString().slice(-2)}`;
+        dn = `SSPTPL/HR /${year.toString().slice(-2)}/${String(seq + 1).padStart(4, '0')}`;
       } else if (doc.doc_type === 'internship_certificate') {
-        dn = `SSPTPL/HR /${year.toString().slice(-2)}`;
+        dn = `SSPTPL/HR /${year.toString().slice(-2)}/${String(seq + 1).padStart(4, '0')}`;
       } else if (doc.doc_type === 'experience_certificate') {
         dn = null; // Experience certificates don't have reference numbers
       } else {

@@ -74,7 +74,7 @@ export default function TasksPage() {
   })) || [];
 
   const { data: users } = useQuery({
-    queryKey: ['usersList'],
+    queryKey: ['usersList', 100],
     queryFn: async () => (await api.get('/users?limit=100')).data,
     retry: false,
     enabled: !loading && !!user && isAdmin,
@@ -107,7 +107,7 @@ export default function TasksPage() {
       if (d.estimatedHours) payload.estimatedHours = Number(d.estimatedHours);
       return (await api.post('/tasks', payload)).data;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tasks'] }); setShowCreate(false); setForm({ title: '', description: '', priority: 'medium', dueDate: '', assigneeIds: [], estimatedHours: '' }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tasks'] }); qc.invalidateQueries({ queryKey: ['taskStats'] }); qc.invalidateQueries({ queryKey: ['taskStatsAdmin'] }); setShowCreate(false); setForm({ title: '', description: '', priority: 'medium', dueDate: '', assigneeIds: [], estimatedHours: '' }); },
     onError: (e) => setError(getApiError(e, 'Failed')),
   });
 
@@ -126,17 +126,19 @@ export default function TasksPage() {
       return { prev };
     },
     onError: (_e, _vars, ctx) => { if (ctx?.prev) ctx.prev.forEach(([k, d]: any[]) => qc.setQueryData(k, d)); setError('Failed to update status'); },
-    onSettled: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
+    onSettled: () => { qc.invalidateQueries({ queryKey: ['tasks'] }); qc.invalidateQueries({ queryKey: ['taskStats'] }); qc.invalidateQueries({ queryKey: ['taskStatsAdmin'] }); qc.invalidateQueries({ queryKey: ['employeeProgress'] }); },
   });
 
   const updateProgress = useMutation({
     mutationFn: async ({ id, progressPercent }: { id: string; progressPercent: number }) => (await api.patch(`/tasks/${id}`, { progressPercent })).data,
-    onSettled: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
+    onError: (e) => setError(getApiError(e, 'Failed to update progress')),
+    onSettled: () => { qc.invalidateQueries({ queryKey: ['tasks'] }); qc.invalidateQueries({ queryKey: ['taskStats'] }); qc.invalidateQueries({ queryKey: ['employeeProgress'] }); },
   });
 
   const updateActualHours = useMutation({
     mutationFn: async ({ id, actualHours }: { id: string; actualHours: number }) => (await api.patch(`/tasks/${id}`, { actualHours })).data,
-    onSettled: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
+    onError: (e) => setError(getApiError(e, 'Failed to update hours')),
+    onSettled: () => { qc.invalidateQueries({ queryKey: ['tasks'] }); qc.invalidateQueries({ queryKey: ['taskStats'] }); },
   });
 
   const taskColumns = useMemo<Column<any>[]>(() => [
@@ -169,7 +171,8 @@ export default function TasksPage() {
 
   const deleteTask = useMutation({
     mutationFn: async (id: string) => (await api.delete(`/tasks/${id}`)).data,
-    onSettled: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
+    onError: (e) => setError(getApiError(e, 'Failed to delete task')),
+    onSettled: () => { qc.invalidateQueries({ queryKey: ['tasks'] }); qc.invalidateQueries({ queryKey: ['taskStats'] }); qc.invalidateQueries({ queryKey: ['taskStatsAdmin'] }); },
   });
 
   const requestApproval = useMutation({

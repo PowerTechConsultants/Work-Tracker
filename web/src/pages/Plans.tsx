@@ -24,7 +24,7 @@ export default function PlansPage() {
   });
 
   const { data: usersData } = useQuery({
-    queryKey: ['usersList'],
+    queryKey: ['usersList', 100],
     queryFn: async () => (await api.get('/users?limit=100')).data,
     retry: false,
     enabled: isAdmin && !loading && !!user,
@@ -55,7 +55,7 @@ export default function PlansPage() {
       return { queries };
     },
     onError: (_e, _id, ctx) => { if (ctx?.queries) for (const [key, data] of ctx.queries) qc.setQueryData(key, data); setError('Failed to submit plan'); },
-    onSettled: () => qc.invalidateQueries({ queryKey: ['plans'] }),
+    onSettled: () => { qc.invalidateQueries({ queryKey: ['plans'] }); qc.invalidateQueries({ queryKey: ['planSlots'] }); },
   });
 
   const reviewPlan = useMutation({
@@ -71,12 +71,13 @@ export default function PlansPage() {
       return { queries };
     },
     onError: (_e, _vars, ctx) => { if (ctx?.queries) for (const [key, data] of ctx.queries) qc.setQueryData(key, data); setError('Review failed'); },
-    onSettled: () => qc.invalidateQueries({ queryKey: ['plans'] }),
+    onSettled: () => { qc.invalidateQueries({ queryKey: ['plans'] }); qc.invalidateQueries({ queryKey: ['planSlots'] }); },
   });
 
   const deletePlan = useMutation({
     mutationFn: async (id: string) => (await api.delete(`/plans/${id}`)).data,
-    onSettled: () => qc.invalidateQueries({ queryKey: ['plans'] }),
+    onError: (e) => setError(getApiError(e, 'Failed to delete plan')),
+    onSettled: () => { qc.invalidateQueries({ queryKey: ['plans'] }); qc.invalidateQueries({ queryKey: ['planSlots'] }); },
   });
 
   const handleExportEmployee = async (userId: string, format: 'csv' | 'xlsx' | 'pdf' = 'xlsx') => {
