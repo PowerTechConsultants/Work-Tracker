@@ -107,12 +107,18 @@ export class UsersService {
     return await this.getById(id);
   }
 
-  static async update(id: string, input: UpdateUserInput) {
+  static async update(id: string, input: UpdateUserInput, requesterRole?: string) {
     if (!await db.prepare('SELECT id FROM users WHERE id = ?').get(id)) throw new AppError(404, 'User not found');
     const allowedFields = ['firstName', 'lastName', 'phoneNumber', 'departmentId', 'designation', 'joiningDate', 'status', 'role', 'dob', 'gender', 'fatherName', 'nationality', 'qualification', 'addressStreet', 'addressCity', 'addressState', 'addressPincode'];
+    // Privilege guard: only directors may change role or status (HR would otherwise self-promote)
+    const sanitized: Record<string, unknown> = { ...(input as Record<string, unknown>) };
+    if (requesterRole !== 'director') {
+      delete sanitized.role;
+      delete sanitized.status;
+    }
     const sets: string[] = ["updated_at = datetime('now')"];
     const params: any[] = [];
-    for (const [k, v] of Object.entries(input)) {
+    for (const [k, v] of Object.entries(sanitized)) {
       if (v === undefined || !allowedFields.includes(k)) continue;
       const col = k.replace(/([A-Z])/g, '_$1').toLowerCase();
       sets.push(`${col} = ?`);
