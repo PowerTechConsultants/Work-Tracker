@@ -27,10 +27,15 @@ jobs:
         run: npm run build -w web
         env:
           HOSTINGER: 'true'
-          VITE_API_URL: https://api.power-tech.group
-          NEXT_PUBLIC_API_URL: https://api.power-tech.group
+          # Single-process Hostinger (Node 22, Root ./, dist/server.js) serves API + web on same origin -> use relative /api or same origin
+          VITE_API_URL: https://power-tech.group
+          NEXT_PUBLIC_API_URL: https://power-tech.group
 
-      - name: FTP upload web/out to public_html
+      # For Hostinger Node single-process (Other preset, Entry server.js, Output dist), the build on Hostinger itself
+      # already serves web/out via Express (server/src/app.ts:221). FTP is only needed if you use Hostinger *Web Hosting* (Apache public_html) separately.
+      # Keep FTP disabled by default — Hostinger Node will auto-pull from GitHub and run `npm run build` itself.
+      - name: FTP upload web/out to public_html (skip for Node single-process)
+        if: ${{ false }}
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_HOST }}
