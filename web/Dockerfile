@@ -1,7 +1,7 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 ARG API_URL
-ENV API_URL=${API_URL:-http://localhost:4000}
+ENV API_URL=${API_URL:-http://localhost:4001}
 COPY package.json package-lock.json* ./
 RUN npm ci
 COPY . .

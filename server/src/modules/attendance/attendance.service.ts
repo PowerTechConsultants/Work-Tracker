@@ -133,7 +133,12 @@ export class AttendanceService {
     }
 
     const now = new Date().toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
-    await db.prepare("UPDATE attendance SET pause_start_time = ?, pause_end_time = NULL, status = 'on_break', updated_at = ? WHERE id = ?").run(now, now, rec.id);
+    const hasLocation = input?.latitude !== undefined && input?.longitude !== undefined;
+    if (hasLocation) {
+      await db.prepare("UPDATE attendance SET pause_start_time = ?, pause_end_time = NULL, status = 'on_break', latitude = ?, longitude = ?, location_accuracy = ?, location_captured_at = ?, updated_at = ? WHERE id = ?").run(now, now, input!.latitude, input!.longitude, input!.accuracy ?? null, input!.locationCapturedAt ?? now, now, rec.id);
+    } else {
+      await db.prepare("UPDATE attendance SET pause_start_time = ?, pause_end_time = NULL, status = 'on_break', updated_at = ? WHERE id = ?").run(now, now, rec.id);
+    }
     logEvent(rec.id, userId, 'pause_start', input, now);
     const updated = await db.prepare('SELECT * FROM attendance WHERE id = ?').get(rec.id);
     invalidateAttendanceCache();
@@ -162,8 +167,14 @@ export class AttendanceService {
     const nowIso = now.toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
 
     const restoreStatus = rec.status === 'remote' ? 'remote' : 'present';
-    await db.prepare(`UPDATE attendance SET pause_end_time = ?, pause_minutes = ?, status = ?, updated_at = ? WHERE id = ?`)
-      .run(nowIso, totalPause, restoreStatus, nowIso, rec.id);
+    const hasLocationEnd = input?.latitude !== undefined && input?.longitude !== undefined;
+    if (hasLocationEnd) {
+      await db.prepare(`UPDATE attendance SET pause_end_time = ?, pause_minutes = ?, status = ?, latitude = ?, longitude = ?, location_accuracy = ?, location_captured_at = ?, updated_at = ? WHERE id = ?`)
+        .run(nowIso, totalPause, restoreStatus, input!.latitude, input!.longitude, input!.accuracy ?? null, input!.locationCapturedAt ?? nowIso, nowIso, rec.id);
+    } else {
+      await db.prepare(`UPDATE attendance SET pause_end_time = ?, pause_minutes = ?, status = ?, updated_at = ? WHERE id = ?`)
+        .run(nowIso, totalPause, restoreStatus, nowIso, rec.id);
+    }
     logEvent(rec.id, userId, 'pause_end', input, nowIso);
     const updated = await db.prepare('SELECT * FROM attendance WHERE id = ?').get(rec.id);
     invalidateAttendanceCache();

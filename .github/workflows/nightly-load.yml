@@ -72,7 +72,7 @@ jobs:
         run: |
           MYSQL_DATABASE=hr_test DATABASE_URL= nohup npx tsx src/server.ts > /tmp/server.log 2>&1 &
           for i in $(seq 1 30); do
-            if curl -sf http://localhost:4000/health >/dev/null 2>&1; then
+            if curl -sf http://localhost:4001/health >/dev/null 2>&1; then
               echo "Server is up"
               break
             fi

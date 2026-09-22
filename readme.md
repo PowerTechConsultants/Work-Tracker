@@ -35,9 +35,9 @@ npm run dev
 ```
 
 - **Frontend:** http://localhost:3000
-- **Backend API:** http://localhost:4000
-- **Health Check:** http://localhost:4000/health
-- **API Docs:** http://localhost:4000/api-docs
+- **Backend API:** http://localhost:4001
+- **Health Check:** http://localhost:4001/health
+- **API Docs:** http://localhost:4001/api-docs
 
 
 
@@ -158,12 +158,12 @@ employee-work-tracker/
 
 ```bash
 # Login
-curl -X POST http://localhost:4000/api/v1/auth/login \
+curl -X POST http://localhost:4001/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"admin@example.com","password":"Admin@123"}'
 
 # Authenticated request
-curl -X GET http://localhost:4000/api/v1/auth/me \
+curl -X GET http://localhost:4001/api/v1/auth/me \
   -H "Authorization: Bearer <accessToken>"
 ```
 
@@ -210,7 +210,7 @@ See `deployment.md` for full Nginx reverse proxy configuration with SSL.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `NODE_ENV` | development | Environment mode |
-| `PORT` | 4000 | API server port |
+| `PORT` | 4001 | API server port |
 | `CORS_ORIGIN` | http://localhost:3000 | Allowed CORS origins |
 | `DATABASE_PATH` | data.db | SQLite database file |
 | `JWT_ACCESS_SECRET` | (auto-generated) | Access token signing key |

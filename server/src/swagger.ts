@@ -15,11 +15,11 @@ const options: swaggerJsdoc.Options = {
     },
     servers: [
       {
-        url: 'http://localhost:4000',
+        url: 'http://localhost:4001',
         description: 'Development server',
       },
       {
-        url: 'http://0.0.0.0:4000',
+        url: 'http://0.0.0.0:4001',
         description: 'Local network server',
       },
     ],

@@ -15,5 +15,5 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/src/db/schema.mysql.sql ./src/db/schema.mysql.sql
 RUN mkdir -p /app/data /app/backup && chown -R app:nodejs /app
 USER app
-EXPOSE 4000
+EXPOSE 4001
 CMD ["node", "dist/src/server.js"]

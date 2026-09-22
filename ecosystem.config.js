@@ -11,11 +11,11 @@ module.exports = {
       watch: process.env.NODE_ENV !== 'production',
       env: {
         NODE_ENV: 'development',
-        PORT: 4000,
+        PORT: 4001,
       },
       env_production: {
         NODE_ENV: 'production',
-        PORT: 4000,
+        PORT: 4001,
       },
       max_restarts: 10,
       restart_delay: 5000,
