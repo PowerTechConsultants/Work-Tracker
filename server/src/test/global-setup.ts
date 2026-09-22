@@ -17,6 +17,12 @@ export default async function globalSetup() {
   try {
     await conn.query(`CREATE DATABASE IF NOT EXISTS \`${database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
     console.log(`[TestSetup] Database ready: ${database}`);
+    // Clear rate-limit state from previous runs (hr_test persists)
+    try {
+      await conn.query(`USE \`${database}\``);
+      await conn.query('DELETE FROM rate_limits');
+      await conn.query('DELETE FROM api_cache');
+    } catch {}
   } finally {
     await conn.end();
   }

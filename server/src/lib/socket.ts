@@ -174,7 +174,13 @@ export function initializeSocket(httpServer: HttpServer) {
 }
 
 export function getIO(): Server {
-  if (!io) throw new Error('Socket.IO not initialized');
+  if (!io) {
+    // No HTTP server in tests/CLI (hr_test) — return no-op mock instead of throwing
+    if (process.env.NODE_ENV !== 'production') {
+      return { to: () => ({ emit: () => {} }), emit: () => {} } as any;
+    }
+    throw new Error('Socket.IO not initialized');
+  }
   return io;
 }
 
