@@ -563,6 +563,9 @@ export default function AttendancePage() {
                     { label: 'Work End', value: 'work_end' },
                     { label: 'Absent', value: 'absent' },
                     { label: 'Half Day', value: 'half_day' },
+                    { label: 'Leave', value: 'leave' },
+                    { label: 'Holiday', value: 'holiday' },
+                    { label: 'Remote', value: 'remote' },
                   ]},
                   { id: 'dateRange', label: 'Date Range', type: 'daterange' },
                 ]}

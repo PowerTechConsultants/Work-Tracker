@@ -63,7 +63,7 @@ export default function ReportsPage() {
       }
       return { queries };
     },
-    onError: (_e, _id, ctx) => { if (ctx?.queries) for (const [key, data] of ctx.queries) qc.setQueryData(key, data); setError('Submit failed'); },
+    onError: (e, _id, ctx) => { if (ctx?.queries) for (const [key, data] of ctx.queries) qc.setQueryData(key, data); setError(getApiError(e, 'Submit failed')); },
     onSettled: () => { qc.invalidateQueries({ queryKey: ['reports'] }); qc.invalidateQueries({ queryKey: ['reportSlots'] }); },
   });
 
@@ -79,7 +79,7 @@ export default function ReportsPage() {
       }
       return { queries };
     },
-    onError: (_e, _vars, ctx) => { if (ctx?.queries) for (const [key, data] of ctx.queries) qc.setQueryData(key, data); setError('Review failed'); },
+    onError: (e, _vars, ctx) => { if (ctx?.queries) for (const [key, data] of ctx.queries) qc.setQueryData(key, data); setError(getApiError(e, 'Review failed')); },
     onSettled: () => { qc.invalidateQueries({ queryKey: ['reports'] }); qc.invalidateQueries({ queryKey: ['reportSlots'] }); },
   });
 
@@ -114,6 +114,12 @@ export default function ReportsPage() {
         {isError && (
           <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 text-sm rounded-xl px-4 py-3">
             Failed to load reports. Refresh to try again.
+          </div>
+        )}
+        {error && (
+          <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 text-sm rounded-xl px-4 py-3 flex items-center justify-between">
+            <span>{error}</span>
+            <button onClick={() => setError('')} className="text-rose-400 hover:text-rose-300 text-xs">Dismiss</button>
           </div>
         )}
 
@@ -214,12 +220,15 @@ export default function ReportsPage() {
                   {r.feedback && <p className="text-xs text-slate-400 mt-2 italic">Feedback: {r.feedback}</p>}
                 </div>
                 <div className="flex gap-2 flex-shrink-0">
-                  {r.status === 'draft' && <button onClick={() => submitReport.mutate(r.id)} className="rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 text-xs font-medium transition">Submit</button>}
-                  {isAdmin && r.status === 'submitted' && (
+                  {r.status === 'draft' && <button onClick={() => submitReport.mutate(r.id)} disabled={submitReport.isPending} className="rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 text-xs font-medium transition disabled:opacity-50 flex items-center gap-1">{submitReport.isPending && <Loader2 className="h-3 w-3 animate-spin" />}Submit</button>}
+                  {isAdmin && r.status === 'submitted' && r.userId !== user?.id && (r as any).user_id !== user?.id && (
                     <>
-                      <button onClick={() => reviewReport.mutate({ id: r.id, status: 'approved' })} className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 text-xs font-medium transition">Approve</button>
-                      <button onClick={() => reviewReport.mutate({ id: r.id, status: 'rejected' })} className="rounded-lg bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 text-xs font-medium transition">Reject</button>
+                      <button onClick={() => reviewReport.mutate({ id: r.id, status: 'approved' })} disabled={reviewReport.isPending} className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 text-xs font-medium transition disabled:opacity-50">Approve</button>
+                      <button onClick={() => reviewReport.mutate({ id: r.id, status: 'rejected' })} disabled={reviewReport.isPending} className="rounded-lg bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 text-xs font-medium transition disabled:opacity-50">Reject</button>
                     </>
+                  )}
+                  {isAdmin && r.status === 'submitted' && (r.userId === user?.id || (r as any).user_id === user?.id) && (
+                    <span className="text-xs text-slate-500 italic px-2 py-1.5">Awaiting other reviewer</span>
                   )}
                   {isAdmin && (
                     <button

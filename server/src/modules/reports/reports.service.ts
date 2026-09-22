@@ -1,5 +1,6 @@
 import db, { uuid } from '../../db/index.js';
 import { AppError } from '../../lib/app-error.js';
+import { cache } from '../../lib/cache.js';
 
 function mapReport(r: any) {
   return {
@@ -26,6 +27,7 @@ export class ReportsService {
       if (err?.message?.includes('UNIQUE constraint') || err?.message?.includes('Duplicate entry') || err?.message?.includes('ER_DUP_ENTRY')) throw new AppError(409, 'Report already exists for this date');
       throw err;
     }
+    await cache.delContaining('/api/v1/reports');
     return mapReport(await db.prepare('SELECT * FROM work_reports WHERE id = ?').get(id));
   }
 
@@ -66,11 +68,12 @@ export class ReportsService {
     if (input.tomorrowPlan !== undefined) { sets.push('tomorrow_plan = ?'); params.push(input.tomorrowPlan); }
     params.push(id);
     await db.prepare(`UPDATE work_reports SET ${sets.join(', ')} WHERE id = ?`).run(...params);
+    await cache.delContaining('/api/v1/reports');
     return mapReport(await db.prepare('SELECT * FROM work_reports WHERE id = ?').get(id));
   }
 
   static async submit(id: string, userId: string) {
-    return await db.transaction(async () => {
+    const result = await db.transaction(async () => {
       const report = await db.prepare('SELECT * FROM work_reports WHERE id = ?').get(id) as any;
       if (!report) throw new AppError(404, 'Report not found');
       if (report.user_id !== userId) throw new AppError(403, 'Cannot submit others report');
@@ -83,21 +86,25 @@ export class ReportsService {
       }
       return mapReport(await db.prepare('SELECT * FROM work_reports WHERE id = ?').get(id));
     })();
+    await cache.delContaining('/api/v1/reports');
+    return result;
   }
 
   static async review(id: string, reviewedById: string, status: string, comments?: string) {
-    return await db.transaction(async () => {
+    const result = await db.transaction(async () => {
       const report = await db.prepare('SELECT * FROM work_reports WHERE id = ?').get(id) as any;
       if (!report) throw new AppError(404, 'Report not found');
       if (report.status !== 'submitted') throw new AppError(409, 'Report not in reviewable state');
       if (report.user_id === reviewedById) throw new AppError(403, 'Cannot review your own report');
-      const result = await db.prepare("UPDATE work_reports SET status = ?, feedback = ?, reviewed_by_id = ?, reviewed_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND status = 'submitted'")
+      const upd = await db.prepare("UPDATE work_reports SET status = ?, feedback = ?, reviewed_by_id = ?, reviewed_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND status = 'submitted'")
         .run(status, comments ?? null, reviewedById, id);
-      if (result.changes === 0) throw new AppError(409, 'Already reviewed');
+      if (upd.changes === 0) throw new AppError(409, 'Already reviewed');
       await db.prepare('INSERT INTO notifications (id, recipient_id, sender_id, title, message, type, link) VALUES (?, ?, ?, ?, ?, ?, ?)')
         .run(uuid(), report.user_id, reviewedById, `Report ${status}`, `Your daily report has been ${status}`, status === 'approved' ? 'success' : 'warning', `/reports/${id}`);
       return mapReport(await db.prepare('SELECT * FROM work_reports WHERE id = ?').get(id));
     })();
+    await cache.delContaining('/api/v1/reports');
+    return result;
   }
 
   static async delete(id: string, userId: string, role?: string) {
@@ -110,6 +117,7 @@ export class ReportsService {
       if (report.status !== 'draft') throw new AppError(409, 'Only draft reports can be deleted');
     }
     await db.prepare('DELETE FROM work_reports WHERE id = ?').run(id);
+    await cache.delContaining('/api/v1/reports');
     return { message: 'Report deleted' };
   }
 

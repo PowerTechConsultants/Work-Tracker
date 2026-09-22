@@ -213,7 +213,22 @@ export class DocumentsService {
       const current = inputFields[key];
       if (current === undefined || current === null || current === '') inputFields[key] = value;
     }
-  }
+   }
+
+    // Salary slip alias mapping: frontend uses daysWorked/basicPay/travellingAllowance, backend expects paidDays/basic/conveyance
+    if (doc.doc_type === 'salary_slip') {
+      const f: any = inputFields;
+      if (f.daysWorked !== undefined && f.paidDays === undefined) f.paidDays = f.daysWorked;
+      if (f.basicPay !== undefined && f.basic === undefined) f.basic = f.basicPay;
+      if (f.travellingAllowance !== undefined && f.conveyance === undefined) f.conveyance = f.travellingAllowance;
+      if (f.dearnessAllowance !== undefined && f.hra === undefined) f.hra = f.dearnessAllowance;
+      if (f.variablePay !== undefined && f.specialAllowance === undefined) f.specialAllowance = f.variablePay;
+      // lopDays optional, ensure number
+      if (f.advancePaid !== undefined && f.otherDeductions === undefined) f.otherDeductions = f.advancePaid;
+      // Ensure required fields have defaults if still missing
+      if (f.paidDays === undefined || f.paidDays === '') f.paidDays = 30;
+      if (f.basic === undefined || f.basic === '') f.basic = 0;
+    }
 
     const parsed = fieldSchema.safeParse(inputFields);
     if (!parsed.success) {
