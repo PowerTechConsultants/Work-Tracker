@@ -50,7 +50,12 @@ export const initializeSocket = (token: string) => {
     socket.on('disconnect', () => {
     });
 
-    socket.on('connect_error', (error) => {
+    socket.on('connect_error', (error: any) => {
+      const msg = error?.message ?? String(error);
+      // HMR / fast refresh causes a benign "closed before the connection is established"
+      if (msg.includes('closed before the connection') || (msg.includes('websocket error') && !socket?.connected)) {
+        return;
+      }
       console.error('[Socket] Connection error:', error);
     });
 

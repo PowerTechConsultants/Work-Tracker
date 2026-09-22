@@ -88,12 +88,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user, loading, pathname, navigate]);
 
   useEffect(() => {
-    if (user && getAccessToken()) {
-      initializeSocket(getAccessToken()!);
+    const token = getAccessToken();
+    if (user && token && !isTokenExpired(token)) {
+      initializeSocket(token);
       joinUserRoom(user.id);
+    } else if (!user) {
+      disconnectSocket();
     }
-    return () => { disconnectSocket(); };
   }, [user]);
+
+  // Cleanup only on app unmount, not on every user change (prevents HMR close-before-connect)
+  useEffect(() => {
+    return () => { disconnectSocket(); };
+  }, []);
 
   const login = useCallback(async (email: string, password: string, pendingAuthToken?: string, twoFactorCode?: string) => {
     setLoading(true);
