@@ -499,14 +499,46 @@ export default function AttendancePage() {
     onSettled: () => { qc.invalidateQueries({ predicate: (q) => ['todayAtt', 'attendance', 'monthlySummary', 'todayAll', 'todayEvents'].includes(q.queryKey[0] as string) }); },
   });
 
-  const handleStartPause = () => {
-    setPendingPause('on_break');
-    startPause.mutate(undefined, { onError: () => setPendingPause(null) });
+  const handleStartPause = async () => {
+    setGettingLocation(true);
+    setLocationProgress(null);
+    setLocationError(null);
+    try {
+      const result = await captureLocation({ onProgress: setLocationProgress });
+      const loc = (result as any)?.location ?? null;
+      const err = (result as any)?.error ?? null;
+      if (!loc && err) setLocationError(`${getLocationErrorMessage(err)} Pause will proceed without location.`);
+      setPendingPause('on_break');
+      startPause.mutate(loc ?? undefined, { onError: () => setPendingPause(null) });
+    } catch (e) {
+      setLocationError(`${getLocationErrorMessage(e)} Pause will proceed without location.`);
+      setPendingPause('on_break');
+      startPause.mutate(undefined, { onError: () => setPendingPause(null) });
+    } finally {
+      setGettingLocation(false);
+      setLocationProgress(null);
+    }
   };
 
-  const handleEndPause = () => {
-    setPendingPause('present');
-    endPause.mutate(undefined, { onError: () => setPendingPause(null) });
+  const handleEndPause = async () => {
+    setGettingLocation(true);
+    setLocationProgress(null);
+    setLocationError(null);
+    try {
+      const result = await captureLocation({ onProgress: setLocationProgress });
+      const loc = (result as any)?.location ?? null;
+      const err = (result as any)?.error ?? null;
+      if (!loc && err) setLocationError(`${getLocationErrorMessage(err)} Resume will proceed without location.`);
+      setPendingPause('present');
+      endPause.mutate(loc ?? undefined, { onError: () => setPendingPause(null) });
+    } catch (e) {
+      setLocationError(`${getLocationErrorMessage(e)} Resume will proceed without location.`);
+      setPendingPause('present');
+      endPause.mutate(undefined, { onError: () => setPendingPause(null) });
+    } finally {
+      setGettingLocation(false);
+      setLocationProgress(null);
+    }
   };
 
   useEffect(() => {

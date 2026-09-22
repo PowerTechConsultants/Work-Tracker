@@ -44,8 +44,15 @@ export function captureLocation(options: CaptureOptions = {}): Promise<CaptureRe
 
   return new Promise((resolve) => {
     if (typeof window !== 'undefined' && !window.isSecureContext) {
-      console.warn('[Location] Not a secure context — geolocation requires HTTPS or localhost');
-      resolve({ location: null, error: { code: 'PERMISSION_DENIED', message: 'Location requires HTTPS. Please use https:// or localhost.' } });
+      const host = window.location.hostname;
+      const isLocalhost = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+      const isLanIp = /^\d+\.\d+\.\d+\.\d+$/.test(host) || host.endsWith('.local');
+      let msg = 'Location requires HTTPS. Please use https:// or localhost.';
+      if (isLanIp && !isLocalhost) {
+        msg = `Location blocked: ${host} is not a secure context. Use http://localhost:3000 on this device, or run "npm run dev:https" and trust the self-signed cert (web/certs/) for LAN HTTPS.`;
+      }
+      console.warn('[Location] Not a secure context —', host, isLanIp ? '(LAN IP)' : '');
+      resolve({ location: null, error: { code: 'PERMISSION_DENIED', message: msg } });
       return;
     }
     if (typeof window === 'undefined' || !('geolocation' in navigator)) {
