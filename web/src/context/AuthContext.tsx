@@ -1,7 +1,5 @@
-'use client';
-
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { api, setAccessToken, getAccessToken, doRefresh, onTokenChange } from '../lib/api';
 import { initializeSocket, disconnectSocket, joinUserRoom } from '../lib/socket';
 import { queryClient } from '../lib/queryClient';
@@ -44,8 +42,8 @@ function isTokenExpired(token: string): boolean {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
-  const pathname = usePathname();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
 
   useEffect(() => {
     let cancelled = false;
@@ -85,9 +83,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (loading) return;
     const isPublic = PUBLIC_PATHS.includes(pathname);
-    if (!user && !isPublic) router.push('/login');
-    else if (user && isPublic) router.push('/dashboard');
-  }, [user, loading, pathname, router]);
+    if (!user && !isPublic) navigate('/login');
+    else if (user && isPublic) navigate('/dashboard');
+  }, [user, loading, pathname, navigate]);
 
   useEffect(() => {
     if (user && getAccessToken()) {
@@ -104,7 +102,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const res = await api.post('/auth/login', { email, password, pendingAuthToken, twoFactorCode });
         setAccessToken(res.data.accessToken);
         setUser(res.data.user);
-        router.push('/dashboard');
+        navigate('/dashboard');
         return { twoFactorRequired: false };
       }
       const res = await api.post('/auth/login', { email, password });
@@ -113,7 +111,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       setAccessToken(res.data.accessToken);
       setUser(res.data.user);
-      router.push('/dashboard');
+      navigate('/dashboard');
       return { twoFactorRequired: false };
     } catch (err) {
       setAccessToken(null);
@@ -122,7 +120,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  }, [navigate]);
 
   const logout = useCallback(async () => {
     try {
@@ -132,8 +130,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
     disconnectSocket();
     queryClient.clear();
-    router.push('/login');
-  }, [router]);
+    navigate('/login');
+  }, [navigate]);
 
   const refreshProfile = useCallback(async () => {
     try {

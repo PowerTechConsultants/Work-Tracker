@@ -15,22 +15,26 @@ export default defineConfig({
   webServer: [
     {
       command: 'npm run dev -w server',
-      url: 'http://localhost:4000/health',
-      reuseExistingServer: true,
+      url: 'http://localhost:4001/health',
+      reuseExistingServer: false,
       timeout: 120000,
       cwd: '..',
       env: {
         DATABASE_URL: '',
         MYSQL_DATABASE: 'hr_test',
         NODE_ENV: 'test',
+        PORT: '4001',
       },
     },
     {
       command: 'npm run dev -w web',
       url: 'http://localhost:3000/login',
-      reuseExistingServer: true,
+      reuseExistingServer: false,
       timeout: 180000,
       cwd: '..',
+      env: {
+        VITE_API_PORT: '4001',
+      },
     },
   ],
 });

@@ -1,7 +1,5 @@
-'use client';
-
 import { useState, useEffect, useRef, useCallback } from 'react';
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { listenOnSocket } from '@/lib/socket';
 import { api } from '@/lib/api';
@@ -186,7 +184,7 @@ export default function NotificationBell() {
 
           <div className="border-t border-slate-800 px-4 py-2.5">
             <Link
-              href="/notifications"
+              to="/notifications"
               onClick={() => setOpen(false)}
               className="block text-center text-xs font-medium text-violet-400 hover:text-violet-300 transition"
             >

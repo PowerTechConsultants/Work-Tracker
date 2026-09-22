@@ -27,6 +27,7 @@ jobs:
         run: npm run build -w web
         env:
           HOSTINGER: 'true'
+          VITE_API_URL: https://api.power-tech.group
           NEXT_PUBLIC_API_URL: https://api.power-tech.group
 
       - name: FTP upload web/out to public_html

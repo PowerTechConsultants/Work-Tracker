@@ -14,11 +14,14 @@ const isJwtExpired = (token: string) => {
   }
 };
 
+import { getEnv, isProduction } from './env';
+
 export const initializeSocket = (token: string) => {
   const API_URL =
-    process.env.NEXT_PUBLIC_API_URL ||
+    getEnv('VITE_API_URL') ??
+    getEnv('NEXT_PUBLIC_API_URL') ??
     (typeof window !== 'undefined'
-      ? (process.env.NODE_ENV === 'production'
+      ? (isProduction()
         ? window.location.origin
         : `${window.location.protocol}//${window.location.hostname}:4000`)
       : 'http://localhost:4000');

@@ -1,6 +1,7 @@
 import axios from 'axios';
+import { getEnv } from './env';
 
-const apiOrigin = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, '');
+const apiOrigin = (getEnv('VITE_API_URL') ?? getEnv('NEXT_PUBLIC_API_URL'))?.replace(/\/+$/, '');
 
 export const api = axios.create({
   baseURL: apiOrigin ? `${apiOrigin}/api/v1` : '/api/v1',
