@@ -1,11 +1,13 @@
 name: Deploy Frontend to Hostinger
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'web/**'
-      - '.github/workflows/deploy-frontend.yml'
+  workflow_dispatch:
+# push disabled — Hostinger deploy via GitHub is OFF (manual File Manager / dist upload only)
+#  push:
+#    branches: [main]
+#    paths:
+#      - 'web/**'
+#      - '.github/workflows/deploy-frontend.yml'
 
 jobs:
   deploy-frontend:
