@@ -33,6 +33,11 @@ export const config = {
     pass: process.env.SMTP_PASS || '',
     from: process.env.SMTP_FROM || 'noreply@hr-app.com',
   },
+  // Explicit opt-out: EMAIL_ENABLED=false forces no email even if SMTP is set.
+  // Default: auto-detect — email only when SMTP host+user are present.
+  emailEnabled: process.env.EMAIL_ENABLED != null
+    ? process.env.EMAIL_ENABLED === 'true'
+    : Boolean(process.env.SMTP_HOST && process.env.SMTP_USER),
 };
 
 if (config.nodeEnv === 'production') {

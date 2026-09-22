@@ -3,7 +3,7 @@ import { getIO } from '../../lib/socket.js';
 import { getISTDate, isSundayIST, parseUTC } from '../../lib/time.js';
 import { cache } from '../../lib/cache.js';
 import { AppError } from '../../lib/app-error.js';
-import { sendLeaveNotification } from '../../lib/email.js';
+import { sendLeaveNotification, isEmailConfigured } from '../../lib/email.js';
 
 const LEAVE_BALANCES: Record<'casual' | 'sick' | 'proposal', number> = { casual: 8, sick: 8, proposal: 16 };
 const ANNUAL_LEAVE_ALLOWANCE = LEAVE_BALANCES.casual + LEAVE_BALANCES.sick + LEAVE_BALANCES.proposal; // 32 days per year
@@ -252,9 +252,9 @@ export class LeavesService {
       }
       return mapLeave(await db.prepare('SELECT l.*, u.first_name, u.last_name, u.employee_id FROM leaves l JOIN users u ON l.user_id = u.id WHERE l.id = ?').get(id));
     }))();
-    if (!isAutoApprove) {
-      // Emails AFTER commit: SMTP inside the transaction holds locks during
-      // sending and duplicates mail if the transaction rolls back and retries.
+    if (!isAutoApprove && isEmailConfigured()) {
+      // Emails AFTER commit: gated by isEmailConfigured() — notifications are
+      // the primary channel; email is optional (no SMTP = silently skipped).
       const notifyAdmins = (await db.prepare("SELECT id, email, first_name, last_name FROM users WHERE role IN ('director', 'hr')").all()) as any[];
       for (const a of notifyAdmins) {
         try { await sendLeaveNotification({ id: leaveRecord.id, type: input.type, startDate, endDate, reason: input.reason ?? undefined }, 'submitted', { id: a.id, email: a.email, firstName: a.first_name, lastName: a.last_name }); } catch (e: any) { console.error('[Email] Failed:', e.message); }
@@ -419,11 +419,12 @@ export class LeavesService {
       await db.prepare('INSERT INTO notifications (id, recipient_id, sender_id, title, message, type, link) VALUES (?, ?, ?, ?, ?, ?, ?)')
         .run(uuid(), leave.user_id, reviewedById, `Leave ${status}`, `Your ${leave.type} leave has been ${status}`, status === 'approved' ? 'success' : 'warning', `/leaves/${id}`);
     })();
-    // Email AFTER commit: sending inside the transaction holds locks during
-    // SMTP and duplicates the email if the transaction rolls back and retries.
-    const employee = await db.prepare('SELECT id, email, first_name, last_name FROM users WHERE id = ?').get(leave.user_id) as any;
-    if (employee) {
-      try { await sendLeaveNotification({ id: leave.id, type: leave.type, startDate: leave.start_date, endDate: leave.end_date, reason: leave.reason ?? undefined }, status as 'approved' | 'rejected', { id: employee.id, email: employee.email, firstName: employee.first_name, lastName: employee.last_name }); } catch (e: any) { console.error('[Email] Failed:', e.message); }
+    // Email AFTER commit — optional: skipped when SMTP not configured; notifications are primary.
+    if (isEmailConfigured()) {
+      const employee = await db.prepare('SELECT id, email, first_name, last_name FROM users WHERE id = ?').get(leave.user_id) as any;
+      if (employee) {
+        try { await sendLeaveNotification({ id: leave.id, type: leave.type, startDate: leave.start_date, endDate: leave.end_date, reason: leave.reason ?? undefined }, status as 'approved' | 'rejected', { id: employee.id, email: employee.email, firstName: employee.first_name, lastName: employee.last_name }); } catch (e: any) { console.error('[Email] Failed:', e.message); }
+      }
     }
     await cache.delByPrefix(`${leave.user_id}:/api/v1/leaves/balance`);
     const updated = mapLeave(await db.prepare('SELECT l.*, u.first_name, u.last_name, u.employee_id FROM leaves l JOIN users u ON l.user_id = u.id WHERE l.id = ?').get(id));
