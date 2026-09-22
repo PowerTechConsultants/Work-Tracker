@@ -12,7 +12,11 @@ import { ensureAdminBootstrap } from './db/bootstrap.js';
 import db, { pool } from './db/index.js';
 import { AttendanceService } from './modules/attendance/attendance.service.js';
 
-await ensureAdminBootstrap();
+try {
+  await ensureAdminBootstrap();
+} catch (e) {
+  console.warn('[SETUP] Admin bootstrap skipped (DB not ready, will retry on next health check):', (e as any)?.message ?? e);
+}
 
 cleanupExpiredBlacklistEntries().catch(() => {});
 runAnnualLeaveReset().catch(e => console.error('[Leave-Reset] Startup error:', e));
