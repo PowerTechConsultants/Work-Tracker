@@ -80,6 +80,15 @@ const overtimeTimer = setInterval(async () => {
 }, 60 * 1000);
 
 const port = config.port;
+server.on('error', (err: any) => {
+  if (err?.code === 'EADDRINUSE') {
+    console.error(`[SERVER] Port ${port} is already in use (0.0.0.0:${port}).`);
+    console.error(`[SERVER] Fix: free the port or run with an alternate port:`);
+    console.error(`[SERVER]   PowerShell: $env:API_PORT=4001; $env:VITE_API_PORT=4001; npm run dev`);
+    console.error(`[SERVER]   Bash: API_PORT=4001 VITE_API_PORT=4001 npm run dev`);
+    console.error(`[SERVER]   Or permanently set API_PORT=4001 and VITE_API_PORT=4001 in server/.env and web/.env`);
+  }
+});
 server.listen(port, '0.0.0.0', () => {
   console.log(`[SERVER] Running on http${enableHttps ? 's' : ''}://0.0.0.0:${port}`);
   console.log(`[SERVER] Access via your local IP address`);

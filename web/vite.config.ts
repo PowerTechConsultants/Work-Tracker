@@ -32,8 +32,8 @@ export default defineConfig({
     // (E2E uses 4001 to avoid clashing with other local services on 4000).
     // Production static hosting calls the absolute VITE_API_URL instead.
     proxy: {
-      '/api': `http://localhost:${process.env.VITE_API_PORT || '4000'}`,
-      '/socket.io': { target: `ws://localhost:${process.env.VITE_API_PORT || '4000'}`, ws: true },
+      '/api': `http://localhost:${process.env.VITE_API_PORT || '4001'}`,
+      '/socket.io': { target: `ws://localhost:${process.env.VITE_API_PORT || '4001'}`, ws: true },
     },
   },
 });
