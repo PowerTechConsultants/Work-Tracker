@@ -6,7 +6,7 @@
   "engines": {
     "node": "22.x"
   },
-  "main": "server.js",
+  "main": "dist/server.js",
   "workspaces": [
     "server",
     "web"
