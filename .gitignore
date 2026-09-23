@@ -1,6 +1,4 @@
 node_modules/
-dist/*
-!dist/.gitkeep
 .next/
 data.db
 *.db
