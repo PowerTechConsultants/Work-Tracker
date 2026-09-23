@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import fs from 'fs';
 
-const certKey = path.resolve(__dirname, 'certs/key.pem');
+const certKey = path.resolve(import.meta.dirname, 'certs/key.pem');
 const certCrt = path.join(path.dirname(certKey), 'cert.pem');
 // LAN HTTPS (geolocation needs a secure context): enabled automatically
 // once `npm run dev:https` has generated certs/ (gitignored).
@@ -16,7 +16,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, 'src'),
+      '@': path.resolve(import.meta.dirname, 'src'),
     },
   },
   build: {
