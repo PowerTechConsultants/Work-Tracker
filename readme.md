@@ -1,6 +1,6 @@
 # Employee Work Tracker
 
-[![CI](https://github.com/djpwrtch-hash/Administrative-Management/actions/workflows/ci.yml/badge.svg)](https://github.com/djpwrtch-hash/Administrative-Management/actions/workflows/ci.yml)
+[![CI](https://github.com/PowerTechConsultants/Work-Tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/PowerTechConsultants/Work-Tracker/actions/workflows/ci.yml)
 
 A production-grade full-stack workforce management application for small to medium teams (30-35 employees). Replaces manual spreadsheets with a centralized system for attendance, tasks, leaves, work plans, reports, and analytics.
 
@@ -8,15 +8,15 @@ A production-grade full-stack workforce management application for small to medi
 
 | Layer | Technology |
 |-------|-----------|
-| **Backend** | Node.js 22+, Express 4.x, TypeScript, mysql2 (raw SQL) |
+| **Backend** | Node.js 22+, Express 4.x, TypeScript, better-sqlite3 (SQLite, MySQL-dialect translation layer) |
 | **Frontend** | React 19 + Vite 8, React Router 7, TypeScript, Tailwind CSS 4 |
-| **Database** | MySQL 8.0 with InnoDB |
+| **Database** | SQLite (file-based, WAL mode). `schema.mysql.sql` is kept for reference only — nothing reads it. |
 | **Auth** | JWT access + refresh tokens (httpOnly cookies), bcrypt (12 rounds) |
 | **Real-time** | Socket.IO for live notifications |
 | **Charts** | Recharts for analytics dashboards |
 | **State** | TanStack React Query v5, Axios with interceptors |
 | **Testing** | Vitest (server 37 + web 38 tests) |
-| **Deployment** | Hostinger Shared (Node 22, `HOSTINGER=true` single-process) / Docker / PM2 |
+| **Deployment** | Hostinger Node (production, `HOSTINGER=true` single-process) / Render (staging, one-time push) / Docker / PM2 |
 
 ## Quick Start
 
@@ -27,8 +27,8 @@ A production-grade full-stack workforce management application for small to medi
 ### Setup
 
 ```bash
-git clone https://github.com/djpwrtch-hash/Administrative-Management.git
-cd Administrative-Management
+git clone https://github.com/PowerTechConsultants/Work-Tracker.git
+cd Work-Tracker/employee-work-tracker
 npm install
 cp server/.env.example server/.env
 npm run dev
@@ -51,7 +51,7 @@ employee-work-tracker/
 │   │   ├── server.ts             # Entry point with graceful shutdown
 │   │   ├── middleware/           # Auth, RBAC, validation, compression, caching
 │   │   ├── lib/                  # Config, JWT, time utils, auto-absent, socket, backup
-│   │   ├── db/                   # MySQL connection, schema, migrations, setup
+│   │   ├── db/                   # SQLite connection, schema, migrations, setup
 │   │   ├── modules/              # 15 feature modules (auth, attendance, tasks, etc.)
 │   │   └── types/                # TypeScript type definitions
 │   ├── tests/                    # Frontend Vitest tests
@@ -97,7 +97,7 @@ employee-work-tracker/
 
 - **JWT Rotation:** Access token (15min) in memory, refresh token (30d) in httpOnly cookie
 - **RBAC:** Director, HR, Employee roles with per-endpoint enforcement
-- **Rate Limiting:** Global, write, auth-specific limits with MySQL persistence
+- **Rate Limiting:** Global, write, auth-specific limits with SQLite persistence
 - **Account Lockout:** 5 failed attempts → 15-minute lockout
 - **Password Reset:** One-time use tokens with 1-hour expiry
 - **Circuit Breaker:** bcrypt failure protection
@@ -139,7 +139,7 @@ employee-work-tracker/
 | Command | Description |
 |---------|-------------|
 | `npm run dev` | Dev server with hot reload (`tsx watch src/server.ts` on :4001) |
-| `npm run build` | TypeScript compilation (`tsc -p tsconfig.json`) |
+| `npm run build` | TypeScript compilation (`tsc -p tsconfig.build.json`) |
 | `npm test` | Vitest (37 tests, 7 files) |
 | `npm run test:watch` | Watch mode |
 | `npm run test:coverage` | Coverage report |
@@ -187,6 +187,10 @@ npx artillery run load-tests/auth-load-test.yml
 
 ## Deployment
 
+> **One-time push only.** Push to `main` to deploy, then turn Auto-Deploy **OFF** on
+> both Render (Settings → Auto-Deploy) and Hostinger (Git → Automatic Deployment)
+> so future pushes don't redeploy. Use **Manual Deploy** / manual pull for releases.
+
 ### Hostinger (production)
 
 ```bash
@@ -194,6 +198,8 @@ npm run build   # tsc + vite build + node scripts/package-hostinger.mjs → dist
 # Upload dist/ (server) + web/out/.htaccess (Permissions-Policy geolocation) to Hostinger
 # Env: HOSTINGER=true, NODE_ENV=production, CORS_ORIGIN=https://power-tech.group, APP_URL=https://power-tech.group, TRUST_PROXY=1, COOKIE_SECURE=true
 # Email optional: leave SMTP_* empty (EMAIL_ENABLED auto false) — notifications are primary
+# DB: SQLite (data.db). No MySQL vars. Set SQLITE_PATH to a persistent path so rebuilds don't wipe data.
+# Entry: node server.js (root). Self-heals missing deps via npm install; refuse to boot on weak JWT/ADMIN_PASSWORD.
 ```
 
 ### Docker
@@ -215,9 +221,10 @@ pm2 startup
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `NODE_ENV` | development | Environment mode |
-| `PORT` | 4001 | API server port |
+| `HOSTINGER` | (unset) | Set `true` on Hostinger Node |
+| `API_PORT` | 4001 | API server port (`PORT` is fallback) |
 | `CORS_ORIGIN` | http://localhost:3000 | Allowed CORS origins |
-| `DATABASE_PATH` | data.db | SQLite database file |
+| `DATABASE_PATH` | data.db | SQLite database file (`SQLITE_PATH` also works) |
 | `JWT_ACCESS_SECRET` | (auto-generated) | Access token signing key |
 | `JWT_REFRESH_SECRET` | (auto-generated) | Refresh token signing key |
 | `JWT_ACCESS_TTL` | 15m | Access token expiry |
