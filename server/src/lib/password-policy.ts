@@ -69,7 +69,7 @@ export async function checkPasswordHistory(userId: string, newPassword: string, 
     'SELECT password_hash FROM password_history WHERE user_id = ? ORDER BY created_at DESC LIMIT ?'
   ).all(userId, p.historyCount) as any[];
 
-  const bcrypt = (await import('bcrypt')).default;
+  const bcrypt = (await import('bcryptjs')).default;
   for (const row of rows) {
     const matches = await bcrypt.compare(newPassword, row.password_hash);
     if (matches) return false;
