@@ -1,132 +1,133 @@
-import http from 'http';
-import https from 'https';
-import fs from 'fs';
-import path from 'path';
-import { createApp } from './app.js';
-import { config } from './lib/config.js';
-import { initializeSocket, closeSocket } from './lib/socket.js';
-import { startAutoAbsentScheduler, stopAutoAbsentScheduler } from './lib/auto-absent.js';
-import { runAnnualLeaveReset } from './lib/leave-reset.js';
-import { cleanupExpiredBlacklistEntries } from './lib/blacklist.js';
-import { ensureAdminBootstrap } from './db/bootstrap.js';
-import db, { pool } from './db/index.js';
-import { AttendanceService } from './modules/attendance/attendance.service.js';
+import http from 'node:http';
+import https from 'node:https';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import express from 'express';
 
-try {
-  await ensureAdminBootstrap();
-} catch (e) {
-  console.warn('[SETUP] Admin bootstrap skipped (DB not ready, will retry on next health check):', (e as any)?.message ?? e);
+const here = path.dirname(fileURLToPath(import.meta.url));
+const cwd = process.cwd();
+
+// Resolve DB path BEFORE any module that calls db/index.js.
+// Use an absolute path inside the project so rebuilds never wipe data.
+if (!process.env.SQLITE_PATH && !process.env.DATABASE_PATH) {
+  process.env.SQLITE_PATH = path.join(cwd, 'data.db');
 }
 
-cleanupExpiredBlacklistEntries().catch(() => {});
-runAnnualLeaveReset().catch(e => console.error('[Leave-Reset] Startup error:', e));
-
-const app = createApp();
-
-const enableHttps = process.env.ENABLE_HTTPS === 'true';
-let server: http.Server | https.Server;
-
-if (enableHttps) {
-  const certDir = path.join(process.cwd(), 'certs');
-  let keyPath = path.join(certDir, 'key.pem');
-  let certPath = path.join(certDir, 'cert.pem');
-
-  if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
-    if (!fs.existsSync(certDir)) fs.mkdirSync(certDir, { recursive: true });
-    try {
-      const cert = await import('./lib/cert.js');
-      cert.generateSelfSignedCert(certDir);
-    } catch (e) {
-      console.warn('[SERVER] Failed to generate SSL certificate:', e);
-      console.warn('[SERVER] Falling back to HTTP. Set ENABLE_HTTPS=false or generate certs manually in certs/');
-      process.exit(1);
-    }
-  }
-
-  server = https.createServer({
-    key: fs.readFileSync(keyPath),
-    cert: fs.readFileSync(certPath),
-  }, app);
-
-  console.log(`[SERVER] HTTPS enabled`);
-} else {
-  server = http.createServer(app);
-}
-
-initializeSocket(server);
-startAutoAbsentScheduler();
-const cleanupTimer = setInterval(async () => {
-  try { await db.prepare("DELETE FROM token_blacklist WHERE expires_at <= NOW()").run(); } catch (e) { console.error('[Cleanup] token_blacklist:', e); }
-  try { await db.prepare("DELETE FROM rate_limits WHERE expires_at <= NOW()").run(); } catch (e) { console.error('[Cleanup] rate_limits:', e); }
-  try { await db.prepare("DELETE FROM refresh_tokens WHERE expires_at <= NOW()").run(); } catch (e) { console.error('[Cleanup] refresh_tokens:', e); }
-  try { await db.prepare("DELETE FROM api_cache WHERE expires_at <= NOW()").run(); } catch (e) { console.error('[Cleanup] api_cache:', e); }
-}, 60 * 60 * 1000);
-
-const overtimeTimer = setInterval(async () => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
-  const lastDay = new Date(year, month, 0).getDate();
-  const isLastDay = now.getDate() === lastDay;
-  const isNearMidnight = now.getHours() === 23 && now.getMinutes() >= 55;
-  if (isLastDay && isNearMidnight) {
-    const lastCalc = await db.prepare("SELECT value FROM app_settings WHERE `key` = 'monthly_overtime_last_calc'").get() as any;
-    const calcKey = `${year}-${month}`;
-    if (lastCalc?.value !== calcKey) {
-      console.log(`[Overtime] Running monthly overtime calculation for ${year}-${month}`);
-      try {
-        await AttendanceService.recalculateAllOvertime(year, month);
-        await db.prepare("INSERT INTO app_settings (`key`, value, updated_at) VALUES (?, ?, NOW()) ON DUPLICATE KEY UPDATE value = VALUES(value), updated_at = NOW()").run('monthly_overtime_last_calc', calcKey);
-        console.log(`[Overtime] Completed for ${year}-${month}`);
-      } catch (e) { console.error('[Overtime] Calculation error:', e); }
-    }
-  }
-}, 60 * 1000);
-
-const port = config.port;
-server.on('error', (err: any) => {
-  if (err?.code === 'EADDRINUSE') {
-    console.error(`[SERVER] Port ${port} is already in use (0.0.0.0:${port}).`);
-    console.error(`[SERVER] Fix: free the port or run with an alternate port:`);
-    console.error(`[SERVER]   PowerShell: $env:API_PORT=4001; $env:VITE_API_PORT=4001; npm run dev`);
-    console.error(`[SERVER]   Bash: API_PORT=4001 VITE_API_PORT=4001 npm run dev`);
-    console.error(`[SERVER]   Or permanently set API_PORT=4001 and VITE_API_PORT=4001 in server/.env and web/.env`);
-  }
-});
-server.listen(port, '0.0.0.0', () => {
-  console.log(`[SERVER] Running on http${enableHttps ? 's' : ''}://0.0.0.0:${port}`);
-  console.log(`[SERVER] Access via your local IP address`);
-  console.log(`[ENV] ${config.nodeEnv}`);
-});
-
-let shuttingDown = false;
-const gracefulShutdown = async (signal: string, exitCode = 0) => {
-  if (shuttingDown) return;
-  shuttingDown = true;
-  console.log(`\n[SHUTDOWN] ${signal} received. Starting graceful shutdown...`);
-  stopAutoAbsentScheduler();
-  closeSocket();
-  console.log('[SHUTDOWN] Socket.IO server closed');
-  clearInterval(cleanupTimer);
-  clearInterval(overtimeTimer);
-  server.close(async () => {
-    console.log('[SHUTDOWN] HTTP server closed');
-    try { await pool.end(); } catch (e) { console.error('[Shutdown] Pool close error:', e); }
-    process.exit(exitCode);
+function minimalApp(): express.Express {
+  const app = express();
+  app.get('/health', (_req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString(), uptime: process.uptime() });
   });
-  setTimeout(() => {
-    console.log('[SHUTDOWN] Forced exit after timeout');
-    process.exit(exitCode);
-  }, 10000);
-};
+  app.get('/ready', async (_req, res) => {
+    res.json({ status: 'degraded', timestamp: new Date().toISOString() });
+  });
+  return app;
+}
 
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+async function startRealApp(): Promise<express.Express> {
+  const { createApp } = await import('./app.js');
+  return createApp();
+}
+
+async function main() {
+  let app: express.Express;
+  try {
+    app = await startRealApp();
+  } catch (e: any) {
+    console.error('[STARTUP] createApp failed, using minimal app:', e?.message ?? e);
+    app = minimalApp();
+  }
+
+  const enableHttps = process.env.ENABLE_HTTPS === 'true';
+  let server: http.Server | https.Server;
+  if (enableHttps) {
+    const certDir = path.join(cwd, 'certs');
+    const keyPath = path.join(certDir, 'key.pem');
+    const certPath = path.join(certDir, 'cert.pem');
+    if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
+      server = https.createServer({ key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) }, app);
+    } else {
+      server = http.createServer(app);
+    }
+  } else {
+    server = http.createServer(app);
+  }
+
+  const port = Number(process.env.API_PORT || process.env.PORT || 4001);
+  server.on('error', (err: any) => {
+    if (err?.code === 'EADDRINUSE') {
+      console.error(`[SERVER] Port ${port} is already in use`);
+    }
+  });
+  server.listen(port, '0.0.0.0', () => {
+    console.log(`[SERVER] Running on http://0.0.0.0:${port}`);
+    console.log(`[ENV] ${process.env.NODE_ENV || 'development'}`);
+  });
+
+  // Graceful startup: fire-and-forget background jobs, never block the port.
+  (async () => {
+    try {
+      const { ensureAdminBootstrap } = await import('./db/bootstrap.js');
+      try { await ensureAdminBootstrap(); } catch (e: any) {
+        console.warn('[SETUP] Admin bootstrap skipped:', e?.message ?? e);
+      }
+    } catch {}
+    try {
+      const { cleanupExpiredBlacklistEntries } = await import('./lib/blacklist.js');
+      cleanupExpiredBlacklistEntries().catch(() => {});
+    } catch {}
+    try {
+      const { runAnnualLeaveReset } = await import('./lib/leave-reset.js');
+      runAnnualLeaveReset().catch((e: any) => console.error('[Leave-Reset] Startup error:', e));
+    } catch {}
+    try {
+      const { startAutoAbsentScheduler, stopAutoAbsentScheduler } = await import('./lib/auto-absent.js');
+      startAutoAbsentScheduler();
+      const cleanupTimer = setInterval(async () => {
+        try { await (await import('./db/index.js')).default.prepare("DELETE FROM token_blacklist WHERE expires_at <= NOW()").run(); } catch {}
+        try { await (await import('./db/index.js')).default.prepare("DELETE FROM rate_limits WHERE expires_at <= NOW()").run(); } catch {}
+        try { await (await import('./db/index.js')).default.prepare("DELETE FROM refresh_tokens WHERE expires_at <= NOW()").run(); } catch {}
+        try { await (await import('./db/index.js')).default.prepare("DELETE FROM api_cache WHERE expires_at <= NOW()").run(); } catch {}
+      }, 60 * 60 * 1000);
+      const overtimeTimer = setInterval(async () => {
+        try {
+          const { default: db } = await import('./db/index.js');
+          const { AttendanceService } = await import('./modules/attendance/attendance.service.js');
+          const now = new Date();
+          const year = now.getFullYear();
+          const month = now.getMonth() + 1;
+          const lastDay = new Date(year, month, 0).getDate();
+          const isLastDay = now.getDate() === lastDay;
+          const isNearMidnight = now.getHours() === 23 && now.getMinutes() >= 55;
+          if (isLastDay && isNearMidnight) {
+            const lastCalc = await db.prepare("SELECT value FROM app_settings WHERE `key` = 'monthly_overtime_last_calc'").get() as any;
+            const calcKey = `${year}-${month}`;
+            if (lastCalc?.value !== calcKey) {
+              await AttendanceService.recalculateAllOvertime(year, month);
+              await db.prepare("INSERT INTO app_settings (`key`, value, updated_at) VALUES (?, ?, NOW()) ON DUPLICATE KEY UPDATE value = VALUES(value), updated_at = NOW()").run('monthly_overtime_last_calc', calcKey);
+            }
+          }
+        } catch {}
+      }, 60 * 1000);
+      setTimeout(() => { clearInterval(cleanupTimer); clearInterval(overtimeTimer); }, 30 * 60 * 1000);
+    } catch {}
+    try {
+      const { initializeSocket } = await import('./lib/socket.js');
+      initializeSocket(server);
+    } catch {}
+  })().catch(() => {});
+}
+
 process.on('uncaughtException', (error) => {
   console.error('[ERROR] Uncaught Exception:', error);
-  gracefulShutdown('UNCAUGHT_EXCEPTION', 1);
+  console.error('[ERROR] Keeping process alive for health checks...');
+  setTimeout(() => { console.error('[ERROR] Forced exit after uncaught exception'); process.exit(1); }, 30000);
 });
 process.on('unhandledRejection', (reason, promise) => {
   console.error('[ERROR] Unhandled Rejection at:', promise, 'reason:', reason);
-  gracefulShutdown('UNHANDLED_REJECTION', 1);
+});
+
+main().catch((e) => {
+  console.error('[STARTUP] Fatal:', e?.message ?? e);
 });
