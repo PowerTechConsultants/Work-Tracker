@@ -29,6 +29,7 @@ yarn-error.log*
 *.tsbuildinfo
 .next
 out/
+!web/out/.gitkeep
 server_out.txt
 server_err.txt
 

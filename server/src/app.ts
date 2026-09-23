@@ -110,21 +110,15 @@ export function createApp() {
     store: new RateLimitStore('write'),
   });
 
-  // Health check (before rate limiter to avoid LB false positives)
-  app.get('/health', async (_req, res) => {
-    try {
-      const migr = await db.prepare('SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1').get() as any;
-      res.json({
-        status: 'ok',
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
-        environment: config.nodeEnv,
-        version: process.env.npm_package_version || '1.0.0',
-        dbMigrationVersion: migr?.version ?? 0,
-      });
-    } catch {
-      res.status(503).json({ status: 'error', timestamp: new Date().toISOString(), dbMigrationVersion: 0 });
-    }
+  // Health check (before rate limiter, no DB required for Hostinger post-build probe)
+  app.get('/health', (_req, res) => {
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      environment: config.nodeEnv,
+      version: process.env.npm_package_version || '1.0.0',
+    });
   });
 
   // Readiness probe - checks if database is accessible
