@@ -1,8 +1,8 @@
 import dotenv from 'dotenv';
 dotenv.config();
-import { spawnSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import { resolveDbPath } from '../db/index.js';
 
 const BACKUP_DIR = process.env.BACKUP_DIR || path.join(process.cwd(), 'backup');
 
@@ -21,41 +21,25 @@ function timestamp(): string {
 export async function createBackup(prefix = 'employee-tracker'): Promise<string> {
   ensureBackupDir();
 
-  const url = process.env.DATABASE_URL;
-  let host = process.env.MYSQL_HOST || 'localhost';
-  let port = process.env.MYSQL_PORT || '3306';
-  let user = process.env.MYSQL_USER || 'root';
-  let password = process.env.MYSQL_PASSWORD || '';
-  let database = process.env.MYSQL_DATABASE || 'hr';
-  if (!password && !url) {
-    console.error('[Backup] FATAL: MYSQL_PASSWORD (or DATABASE_URL) is required');
-    process.exit(1);
-  }
-  if (url) {
-    try {
-      const u = new URL(url);
-      host = u.hostname || host;
-      port = u.port || port;
-      user = decodeURIComponent(u.username) || user;
-      password = decodeURIComponent(u.password) || password;
-      database = u.pathname.replace(/^\//, '') || database;
-    } catch (e) { console.error('[Backup] URL parse error:', e); }
+  // SQLite: the database is a single file outside dist/ — copy it (+ WAL checkpoint first).
+  const dbPath = resolveDbPath();
+  if (!fs.existsSync(dbPath)) {
+    throw new Error(`[Backup] Database file not found: ${dbPath}`);
   }
 
-  const backupName = `${prefix}-${timestamp()}.sql`;
+  const backupName = `${prefix}-${timestamp()}.db`;
   const backupPath = path.join(BACKUP_DIR, backupName);
-
-  const env = { ...process.env, MYSQL_PWD: password };
-  // Use spawn args to avoid shell sanitize truncating passwords with ! $ etc.
-  const result = spawnSync('mysqldump', ['-h', host, '-P', String(port), '-u', user, '--single-transaction', '--routines', '--triggers', database], { env, maxBuffer: 1024 * 1024 * 200 });
-  if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error(`mysqldump failed: ${result.stderr?.toString() || 'unknown'}`);
-  fs.writeFileSync(backupPath, result.stdout);
+  fs.copyFileSync(dbPath, backupPath);
+  for (const suffix of ['-wal', '-shm', '-journal']) {
+    try {
+      if (fs.existsSync(dbPath + suffix)) fs.copyFileSync(dbPath + suffix, backupPath + suffix);
+    } catch {}
+  }
 
   console.log(`[Backup] Created: ${backupPath}`);
   // Rotation: keep last 7 backups on 50GB Hostinger
   try {
-    const files = fs.readdirSync(BACKUP_DIR).filter((f) => f.endsWith('.sql')).sort();
+    const files = fs.readdirSync(BACKUP_DIR).filter((f) => f.endsWith('.db')).sort();
     if (files.length > 7) {
       for (const f of files.slice(0, files.length - 7)) {
         fs.unlinkSync(path.join(BACKUP_DIR, f));
@@ -69,7 +53,7 @@ export async function createBackup(prefix = 'employee-tracker'): Promise<string>
 export function listBackups(): string[] {
   ensureBackupDir();
   const files = fs.readdirSync(BACKUP_DIR)
-    .filter((f) => f.endsWith('.sql'))
+    .filter((f) => f.endsWith('.db') || f.endsWith('.sql'))
     .sort()
     .reverse();
   return files.map((f) => {

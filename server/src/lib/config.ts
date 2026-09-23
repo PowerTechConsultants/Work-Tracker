@@ -24,6 +24,10 @@ export const config = {
   maxLoginAttempts: Number(env('MAX_LOGIN_ATTEMPTS', '5')),
   lockoutMinutes: Number(env('LOCKOUT_MINUTES', '15')),
   uploadDir: env('UPLOAD_DIR', 'uploads'),
+  // SQLite file database (always outside dist/ so rebuilds never wipe data).
+  // Local dev (cwd=server/): server/data.db ; production (cwd=root): ./data.db.
+  // Override with SQLITE_PATH (absolute, e.g. /home/uXXXX/data/employee.db).
+  sqlitePath: process.env.SQLITE_PATH || process.env.DATABASE_PATH || './data.db',
   cookieSecure: env('COOKIE_SECURE', (process.env.NODE_ENV === 'production').toString()) === 'true',
   adminPassword: env('ADMIN_PASSWORD', 'Admin@123456'),
   smtp: {

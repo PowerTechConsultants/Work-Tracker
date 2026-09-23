@@ -7,10 +7,11 @@ const outputDir = path.join(projectRoot, 'dist');
 const serverBuild = path.join(projectRoot, 'server', 'dist');
 const serverSourceBuild = path.join(serverBuild, 'src');
 const schemaFile = path.join(projectRoot, 'server', 'src', 'db', 'schema.mysql.sql');
+const schemaSqliteFile = path.join(projectRoot, 'server', 'src', 'db', 'schema.sql');
 const serverPackageFile = path.join(projectRoot, 'server', 'package.json');
 const webBuild = path.join(projectRoot, 'web', 'out');
 
-for (const requiredPath of [serverSourceBuild, schemaFile, serverPackageFile, webBuild]) {
+for (const requiredPath of [serverSourceBuild, schemaFile, schemaSqliteFile, serverPackageFile, webBuild]) {
   if (!fs.existsSync(requiredPath)) {
     throw new Error(`Missing build output: ${path.relative(projectRoot, requiredPath)}`);
   }
@@ -32,6 +33,7 @@ fs.writeFileSync(path.join(outputDir, 'package.json'), `${JSON.stringify({
 }, null, 2)}\n`);
 fs.mkdirSync(path.join(outputDir, 'src', 'db'), { recursive: true });
 fs.copyFileSync(schemaFile, path.join(outputDir, 'src', 'db', 'schema.mysql.sql'));
+fs.copyFileSync(schemaSqliteFile, path.join(outputDir, 'src', 'db', 'schema.sql'));
 fs.cpSync(webBuild, path.join(outputDir, 'web', 'out'), { recursive: true });
 
 console.log('[DEPLOY] Packaged server and web output in dist/');

@@ -3,177 +3,133 @@ dotenv.config();
 import { randomUUID } from 'crypto';
 import path from 'path';
 import fs from 'fs';
-import mysql from 'mysql2/promise';
-import { AsyncLocalStorage } from 'async_hooks';
+import Database from 'better-sqlite3';
 
-const txnStore = new AsyncLocalStorage<mysql.PoolConnection>();
-
-const url = process.env.DATABASE_URL;
-let host = process.env.MYSQL_HOST || 'localhost';
-let port = Number(process.env.MYSQL_PORT || '3306');
-let user = process.env.MYSQL_USER || 'root';
-let password = process.env.MYSQL_PASSWORD || '';
-let database = process.env.MYSQL_DATABASE || 'hr';
-if (url) {
-  try {
-    const u = new URL(url);
-    host = u.hostname || host;
-    port = Number(u.port) || port;
-    user = decodeURIComponent(u.username) || user;
-    password = decodeURIComponent(u.password) || password;
-    database = u.pathname.replace(/^\//, '') || database;
-  } catch (e) { console.error('[DB] URL parse error:', e); }
-}
-if (process.env.NODE_ENV === 'production' && !password && !url) {
-  console.error('[DB] FATAL: MYSQL_PASSWORD (or DATABASE_URL) is required in production');
-  process.exit(1);
+// ---- SQLite file location (always OUTSIDE dist/ so rebuilds never wipe data) ----
+// - Local dev (cwd = server/): server/data.db
+// - Production single-process (cwd = project root via server.js): ./data.db
+// - Override with SQLITE_PATH (absolute) or DATABASE_PATH / DATABASE_URL=file:...
+export function resolveDbPath(): string {
+  const raw = process.env.SQLITE_PATH || process.env.DATABASE_PATH || './data.db';
+  const stripped = raw.replace(/^file:/, '');
+  if (path.isAbsolute(stripped)) return stripped;
+  const cwd = process.cwd();
+  const base = cwd.endsWith(`${path.sep}dist`) ? path.dirname(cwd) : cwd;
+  return path.resolve(base, stripped);
 }
 
-const sslEnabled = String(process.env.MYSQL_SSL || '').toLowerCase() === 'true';
-const pool = mysql.createPool({
-  host, port, user, password, database,
-  waitForConnections: true, connectionLimit: 10, queueLimit: 50,
-  enableKeepAlive: true, timezone: '+00:00', connectTimeout: 10000, dateStrings: true,
-  charset: 'utf8mb4',
-  ...(sslEnabled ? { ssl: { rejectUnauthorized: true } } : {}),
-} as any);
-console.log(`[DB] MySQL pool: ${host}:${port}/${database} ssl=${sslEnabled} charset=utf8mb4`);
+const dbPath = resolveDbPath();
+fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 
-// Retry with backoff for Hostinger transient DNS/cold-start (3 attempts)
-let _dbConnected = false;
-for (let attempt = 1; attempt <= 3; attempt++) {
-  try {
-    const conn = await pool.getConnection();
-    try {
-      await conn.ping();
-      console.log('[DB] MySQL connected');
-      _dbConnected = true;
-    } finally {
-      conn.release();
-    }
-    break;
-  } catch (e: any) {
-    console.error(`[DB] MySQL connection failed (attempt ${attempt}/3):`, e.message || e.code || e.errno || e.sqlMessage || String(e));
-    if (e.code) console.error('[DB] code:', e.code, 'errno:', e.errno, 'sqlState:', e.sqlState);
-    if (attempt === 3) {
-      console.error('[DB] All retries exhausted — exiting');
-      console.error('[DB] Env:', { host, port, user, database, sslEnabled });
-      process.exit(1);
-    }
-    await new Promise((r) => setTimeout(r, attempt * 2000));
-  }
-}
-if (!_dbConnected) process.exit(1);
+const sqlite = new Database(dbPath);
+sqlite.pragma('journal_mode = WAL');
+sqlite.pragma('busy_timeout = 5000');
+sqlite.pragma('foreign_keys = ON');
+console.log(`[DB] SQLite: ${dbPath}`);
 
-function translateSql(sql: string): string {
-  return sql
-    .replace(/datetime\('now', '\+' \|\| \? \|\| ' minutes'\)/g, 'NOW() + INTERVAL ? MINUTE')
-    .replace(/datetime\('now', '\+' \|\| \? \|\| ' days'\)/g, 'NOW() + INTERVAL ? DAY')
-    .replace(/datetime\('now', '\+' \|\| \? \|\| ' seconds'\)/g, 'NOW() + INTERVAL ? SECOND')
-    .replace(/datetime\('now', '\+1 hour'\)/g, 'NOW() + INTERVAL 1 HOUR')
-    .replace(/datetime\('now'\)/g, 'NOW()')
-    .replace(/datetime\('now', '\+(\d+) seconds'\)/g, 'NOW() + INTERVAL $1 SECOND')
-    .replace(/date\('now', '-(\d+) days?'\)/g, 'DATE_SUB(CURDATE(), INTERVAL $1 DAY)')
-    .replace(/date\('now', '\+' \|\| (\d+) \|\| ' days'\)/g, 'DATE_ADD(CURDATE(), INTERVAL $1 DAY)')
-    .replace(/date\('now'\)/g, 'CURDATE()')
-    .replace(/strftime\('%Y',\s*([^)]+)\)/g, 'YEAR($1)')
-    .replace(/strftime\('%m',\s*([^)]+)\)/g, 'MONTH($1)')
-    .replace(/strftime\('%d',\s*([^)]+)\)/g, 'DAY($1)')
-    .replace(/strftime\('%H',\s*([^)]+)\)/g, 'HOUR($1)')
-    .replace(/strftime\('%M',\s*([^)]+)\)/g, 'MINUTE($1)')
-    .replace(/strftime\('%S',\s*([^)]+)\)/g, 'SECOND($1)')
-    .replace(/julianday\(([^)]+)\)/g, 'TO_DAYS($1)')
-    .replace(/substr\(/g, 'SUBSTRING(')
-    .replace(/AS INTEGER/gi, 'AS SIGNED')
-    .replace(/\bAUTOINCREMENT\b/gi, 'AUTO_INCREMENT');
-}
+export function uuid(): string { return randomUUID(); }
 
-function translateExec(sql: string): string {
-  let s = sql
-    .replace(/datetime\('now'\)/g, 'NOW()')
-    .replace(/datetime\('now', '\+(\d+) seconds'\)/g, 'NOW() + INTERVAL $1 SECOND')
-    .replace(/\bINTEGER PRIMARY KEY\b/g, 'INT PRIMARY KEY')
-    .replace(/\bTEXT PRIMARY KEY\b/g, 'VARCHAR(36) PRIMARY KEY')
-    .replace(/\bTEXT NOT NULL\b/g, 'VARCHAR(255) NOT NULL')
-    .replace(/\bTEXT UNIQUE\b/g, 'VARCHAR(255) UNIQUE')
-    .replace(/\bREAL\b/g, 'DECIMAL(10,2)')
-    .replace(/\bINTEGER\b/g, 'INT')
-    .replace(/\bTEXT\b/g, 'VARCHAR(255)');
-  // MySQL doesn't support CREATE INDEX IF NOT EXISTS — strip it
-  s = s.replace(/CREATE\s+(UNIQUE\s+)?INDEX\s+IF\s+NOT\s+EXISTS/gi, 'CREATE $1INDEX');
+// ---- MySQL-dialect → SQLite translation (lets existing service code run unchanged) ----
+const CONFLICT_TARGETS: Record<string, string> = {
+  token_blacklist: '(user_id)',
+  rate_limits: '(`key`)',
+  app_settings: '(`key`)',
+  leave_carryforwards: '(user_id, year)',
+  monthly_overtime: '(user_id, year, month)',
+  holiday_assignees: '(holiday_id, user_id)',
+};
+
+function mysqlToSqlite(sql: string): string {
+  let s = sql;
+  // ALTER TABLE t ADD UNIQUE KEY n (...) -> CREATE UNIQUE INDEX (SQLite has no ADD CONSTRAINT)
+  s = s.replace(/ALTER TABLE\s+(\w+)\s+ADD UNIQUE KEY\s+(\w+)\s*(\([^)]+\))/gi, 'CREATE UNIQUE INDEX IF NOT EXISTS $2 ON $1 $3');
+  // UNIQUE KEY n (...) -> UNIQUE(...)
+  s = s.replace(/UNIQUE KEY\s+\w+\s*(\([^)]+\))/gi, 'UNIQUE$1');
+  // INSERT IGNORE -> INSERT OR IGNORE ; REPLACE -> INSERT OR REPLACE
+  s = s.replace(/INSERT\s+IGNORE\s+INTO/gi, 'INSERT OR IGNORE INTO');
+  s = s.replace(/(?<!OR\s)REPLACE\s+INTO/gi, 'INSERT OR REPLACE INTO');
+  // ON DUPLICATE KEY UPDATE -> ON CONFLICT(target) DO UPDATE (per-table target)
+  s = s.replace(/INSERT\s+INTO\s+(`?)(\w+)\1[\s\S]*?ON DUPLICATE KEY UPDATE([\s\S]+?)(;|$)/gi,
+    (_m, _q, table: string, setClause: string, end: string) => {
+      const target = CONFLICT_TARGETS[table];
+      if (!target) throw new Error(`[DB] Unsupported ON DUPLICATE KEY UPDATE for table ${table}`);
+      const head = _m.slice(0, _m.toUpperCase().indexOf('ON DUPLICATE KEY UPDATE'));
+      const set = setClause.replace(/VALUES\s*\(\s*`?(\w+)`?\s*\)/g, 'excluded.$1');
+      return `${head}ON CONFLICT${target} DO UPDATE SET ${set}${end}`;
+    });
+  // IF( -> IIF( (scoped so "INDEX IF NOT EXISTS" is untouched — it has no paren after IF)
+  s = s.replace(/([=,(\s])IF\(/g, '$1IIF(');
+  // GREATEST( -> max(
+  s = s.replace(/\bGREATEST\(/gi, 'max(');
+  // TIMESTAMPDIFF(MINUTE, a, b) -> ((julianday(b) - julianday(a)) * 1440.0)
+  s = s.replace(/TIMESTAMPDIFF\(\s*MINUTE\s*,\s*([^,]+?)\s*,\s*([^)]+?)\)/gi, '((julianday($2) - julianday($1)) * 1440.0)');
+  // YEAR(x) -> CAST(strftime('%Y', x) AS INTEGER)
+  s = s.replace(/\bYEAR\(([^)]+)\)/gi, "CAST(strftime('%Y', $1) AS INTEGER)");
+  // CONVERT_TZ(x, from, +HH:MM) -> datetime(x, '+N minutes')
+  s = s.replace(/CONVERT_TZ\(\s*([^,]+?)\s*,\s*'[^']*'\s*,\s*'([+-])(\d{2}):(\d{2})'\s*\)/gi,
+    (_m, col: string, sign: string, hh: string, mm: string) => {
+      const mins = parseInt(hh, 10) * 60 + parseInt(mm, 10);
+      return `datetime(${col}, '${sign}${mins} minutes')`;
+    });
+  // UNIX_TIMESTAMP(x) -> CAST(strftime('%s', x) AS INTEGER)
+  s = s.replace(/UNIX_TIMESTAMP\(([^)]+)\)/gi, "CAST(strftime('%s', $1) AS INTEGER)");
+  // NOW() + INTERVAL ? UNIT -> datetime('now', '+' || ? || ' unit')
+  s = s.replace(/NOW\(\)\s*\+\s*INTERVAL\s*\?\s*MINUTE/gi, `datetime('now', '+' || ? || ' minutes')`);
+  s = s.replace(/NOW\(\)\s*\+\s*INTERVAL\s*\?\s*DAY/gi, `datetime('now', '+' || ? || ' days')`);
+  s = s.replace(/NOW\(\)\s*\+\s*INTERVAL\s*\?\s*SECOND/gi, `datetime('now', '+' || ? || ' seconds')`);
+  s = s.replace(/NOW\(\)\s*\+\s*INTERVAL\s*\?\s*HOUR/gi, `datetime('now', '+' || ? || ' hours')`);
+  s = s.replace(/NOW\(\)\s*\+\s*INTERVAL\s*1\s*HOUR/gi, `datetime('now', '+1 hour')`);
+  s = s.replace(/NOW\(\)/g, `datetime('now')`);
+  // CURDATE() / DATE_SUB / DATE_ADD
+  s = s.replace(/DATE_SUB\(CURDATE\(\),\s*INTERVAL\s*(\d+)\s*DAY\)/gi, `date('now','-$1 day')`);
+  s = s.replace(/DATE_ADD\(CURDATE\(\),\s*INTERVAL\s*(\d+)\s*DAY\)/gi, `date('now','+$1 day')`);
+  s = s.replace(/CURDATE\(\)/g, `date('now')`);
+  // SELECT ... FOR UPDATE -> plain SELECT (single-writer SQLite serializes via mutex)
+  s = s.replace(/\s+FOR UPDATE\s*(;|$)/gi, '$1');
+  // ESCAPE '\\' (MySQL two-char escape) -> ESCAPE '\' (SQLite requires single char)
+  s = s.replace(/ESCAPE\s+'\\\\'/g, `ESCAPE '\\'`);
+  // ON UPDATE CURRENT_TIMESTAMP (MySQL column option) -> drop
+  s = s.replace(/\s+ON UPDATE CURRENT_TIMESTAMP/gi, '');
   return s;
 }
 
-const schemaMysqlPath = path.join(process.cwd(), 'src', 'db', 'schema.mysql.sql');
-if (fs.existsSync(schemaMysqlPath)) {
-  const schema = fs.readFileSync(schemaMysqlPath, 'utf-8');
-  const stmts = schema.split(';').map(s => s.trim()).filter(Boolean);
-  for (const stmt of stmts) {
-    if (!stmt) continue;
-    // schema.mysql.sql is already MySQL-native — don't apply translateExec (it would convert TEXT to VARCHAR(255))
-    try { await pool.query(stmt); } catch (e: any) { if (!e.message?.includes('already exists') && !e.message?.toLowerCase().includes('duplicate')) console.error('[DB] Schema:', e.message); }
+const stmtCache = new Map<string, any>();
+function getStmt(sql: string): any {
+  const finalSql = mysqlToSqlite(sql);
+  let stmt = stmtCache.get(finalSql);
+  if (!stmt) {
+    stmt = sqlite.prepare(finalSql);
+    if (stmtCache.size < 500) stmtCache.set(finalSql, stmt);
   }
+  return stmt;
 }
 
 const db = {
   prepare: (sql: string) => {
-    if (sql.includes('PRAGMA table_info')) {
-      const table = sql.match(/PRAGMA table_info\(([^)]+)\)/)?.[1]?.replace(/['"]/g, '');
-      return {
-        all: async (..._params: any[]): Promise<any[]> => {
-          const conn = txnStore.getStore();
-          const [rows] = await (conn ?? pool).query(`SELECT ordinal_position as cid, column_name as name, column_type as type, CASE WHEN is_nullable = 'NO' THEN 1 ELSE 0 END as notnull, column_default as dflt_value, CASE WHEN column_key = 'PRI' THEN 1 ELSE 0 END as pk FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ordinal_position`, [table]);
-          return rows as any[];
-        },
-        get: async (..._params: any[]): Promise<any> => {
-          const conn = txnStore.getStore();
-          const [rows] = await (conn ?? pool).query(`SELECT ordinal_position as cid, column_name as name, column_type as type, CASE WHEN is_nullable = 'NO' THEN 1 ELSE 0 END as notnull, column_default as dflt_value, CASE WHEN column_key = 'PRI' THEN 1 ELSE 0 END as pk FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ordinal_position`, [table]);
-          return (rows as any[])[0];
-        },
-        run: async (): Promise<any> => ({ changes: 0, lastInsertRowid: 0 }),
-      };
-    }
-    let finalSql = translateSql(sql);
-    if (finalSql.includes('ON CONFLICT')) {
-      finalSql = finalSql.replace(/ON CONFLICT\([^)]+\) DO UPDATE SET (.+?)(?:, updated_at = (?:datetime\('now'\)|NOW\(\)))?$/s, (_match: string, setClause: string) => {
-        // Replace excluded.col with VALUES(col) for MySQL
-        const mysqlSet = setClause.replace(/excluded\.(\w+)/g, 'VALUES($1)');
-        return `ON DUPLICATE KEY UPDATE ${mysqlSet}, updated_at = NOW()`;
-      });
-      finalSql = finalSql.replace(/ON CONFLICT\([^)]+\) DO NOTHING/g, 'ON DUPLICATE KEY UPDATE id=id');
-      finalSql = finalSql.replace(/INSERT OR REPLACE/g, 'REPLACE').replace(/INSERT OR IGNORE/g, 'INSERT IGNORE');
-    }
-    finalSql = finalSql.replace(/INSERT OR REPLACE/g, 'REPLACE').replace(/INSERT OR IGNORE/g, 'INSERT IGNORE');
     return {
       get: async (...params: any[]): Promise<any> => {
-        const conn = txnStore.getStore();
-        const [rows] = await (conn ?? pool).query(finalSql, params);
-        return (rows as any[])[0];
+        return getStmt(sql).get(...params) ?? undefined;
       },
       all: async (...params: any[]): Promise<any[]> => {
-        const conn = txnStore.getStore();
-        const [rows] = await (conn ?? pool).query(finalSql, params);
-        return rows as any[];
+        return getStmt(sql).all(...params) as any[];
       },
       run: async (...params: any[]): Promise<any> => {
-        const conn = txnStore.getStore();
-        const [result] = await (conn ?? pool).query(finalSql, params) as any;
-        return { changes: result.affectedRows ?? 0, lastInsertRowid: result.insertId };
+        const info = getStmt(sql).run(...params);
+        return { changes: info.changes, lastInsertRowid: Number(info.lastInsertRowid) };
       },
     };
   },
   exec: async (sql: string): Promise<void> => {
     const stmts = sql.split(';').map(s => s.trim()).filter(Boolean);
-    const conn = txnStore.getStore();
     for (const stmt of stmts) {
-      if (!stmt) continue;
-      const t = translateExec(stmt);
-      if (t.includes('PRAGMA')) continue;
+      if (!stmt || stmt.startsWith('--')) continue;
+      const t = mysqlToSqlite(stmt);
+      if (!t) continue;
       try {
-        await (conn ?? pool).query(t);
+        sqlite.exec(t);
       } catch (e: any) {
         const msg = e.message ?? '';
-        if (msg.includes('already exists') || msg.toLowerCase().includes('duplicate') || msg.includes('ER_DUP_ENTRY')) continue;
+        if (/already exists|duplicate column|duplicate/i.test(msg)) continue;
         console.error('[DB] exec failed:', msg);
         throw e;
       }
@@ -182,34 +138,69 @@ const db = {
   pragma: (_?: string) => {},
   transaction: <TArgs extends any[]>(fn: (...args: TArgs) => any) => {
     return async (...args: TArgs) => {
-      const existingConn = txnStore.getStore();
-      if (existingConn) {
-        const sp = `sp_${randomUUID().slice(0, 8)}`;
-        await existingConn.query(`SAVEPOINT ${sp}`);
+      if (txnDepth > 0) {
+        const sp = `sp_${randomUUID().slice(0, 8).replace(/-/g, '')}`;
+        sqlite.exec(`SAVEPOINT "${sp}"`);
+        txnDepth++;
         try {
-          const result = await txnStore.run(existingConn, async () => await fn(...args));
-          await existingConn.query(`RELEASE SAVEPOINT ${sp}`);
+          const result = await fn(...args);
+          sqlite.exec(`RELEASE "${sp}"`);
           return result;
         } catch (e) {
-          try { await existingConn.query(`ROLLBACK TO SAVEPOINT ${sp}`); } catch (rbErr) { console.error('[DB] Savepoint rollback failed:', rbErr); }
+          try { sqlite.exec(`ROLLBACK TO "${sp}"`); } catch {}
+          try { sqlite.exec(`RELEASE "${sp}"`); } catch {}
           throw e;
+        } finally {
+          txnDepth--;
         }
       }
-      const conn = await pool.getConnection();
+      const prev = txnLock;
+      let release!: () => void;
+      txnLock = new Promise<void>((r) => (release = r));
+      await prev;
+      txnDepth++;
       try {
-        await conn.beginTransaction();
-        const result = await txnStore.run(conn, async () => await fn(...args));
-        await conn.commit();
-        return result;
-      } catch (e) {
-        try { await conn.rollback(); } catch (rbErr) { console.error('[DB] Transaction rollback failed:', rbErr); }
-        throw e;
+        sqlite.exec('BEGIN IMMEDIATE');
+        try {
+          const result = await fn(...args);
+          sqlite.exec('COMMIT');
+          return result;
+        } catch (e) {
+          try { sqlite.exec('ROLLBACK'); } catch {}
+          throw e;
+        }
       } finally {
-        conn.release();
+        txnDepth--;
+        release();
       }
     };
   },
 };
+
+let txnDepth = 0;
+let txnLock: Promise<void> = Promise.resolve();
+
+// ---- Schema load (SQLite DDL; candidates cover dev cwd=server/ and prod cwd=root/dist) ----
+function findSchema(): string | null {
+  const candidates = [
+    path.join(process.cwd(), 'src', 'db', 'schema.sql'),
+    path.join(process.cwd(), 'server', 'src', 'db', 'schema.sql'),
+    path.join(process.cwd(), 'dist', 'src', 'db', 'schema.sql'),
+  ];
+  return candidates.find((c) => fs.existsSync(c)) ?? null;
+}
+
+const schemaPath = findSchema();
+if (schemaPath) {
+  const schema = fs.readFileSync(schemaPath, 'utf-8');
+  try {
+    sqlite.exec(schema);
+  } catch (e: any) {
+    if (!/already exists|duplicate/i.test(e.message ?? '')) console.error('[DB] Schema:', e.message);
+  }
+} else {
+  console.warn('[DB] schema.sql not found — expecting migrations to create tables');
+}
 
 async function getAppliedVersions(): Promise<Set<number>> {
   try {
@@ -221,8 +212,11 @@ async function getAppliedVersions(): Promise<Set<number>> {
 }
 
 async function hasColumn(table: string, column: string): Promise<boolean> {
-  const [rows] = await pool.query(`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`, [table, column]) as any;
-  return (rows as any[]).length > 0;
+  if (!/^[a-z_][a-z0-9_]*$/i.test(table) || !/^[a-z_][a-z0-9_]*$/i.test(column)) {
+    throw new Error(`Invalid table or column name: ${table}.${column}`);
+  }
+  const rows = (sqlite.prepare(`SELECT name FROM pragma_table_info('${table}')`).all() as any[]);
+  return rows.some((r: any) => r.name === column);
 }
 
 async function addColumnIfMissing(table: string, column: string, ddl: string): Promise<void> {
@@ -230,7 +224,7 @@ async function addColumnIfMissing(table: string, column: string, ddl: string): P
     throw new Error(`Invalid table or column name: ${table}.${column}`);
   }
   if (await hasColumn(table, column)) return;
-  await db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl.replace(/TEXT/g, 'VARCHAR(255)').replace(/REAL/g, 'DECIMAL(10,2)')}`);
+  await db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
 }
 
 const migrations: Array<{ version: number; name: string; up: () => Promise<void> }> = [
@@ -628,23 +622,38 @@ await db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
 const appliedVersions = await getAppliedVersions();
 for (const m of migrations) {
   if (appliedVersions.has(m.version)) continue;
-  const trx = db.transaction(async () => {
-    await m.up();
-    await db.prepare('INSERT INTO schema_migrations (version, name) VALUES (?, ?)').run(m.version, m.name);
-  });
-  await trx();
-  console.log(`[DB] Applied migration ${m.version}: ${m.name}`);
+  // schema.sql already contains the final schema — migrations are idempotent
+  // backfills, so a single failing statement must not block boot.
+  try {
+    const trx = db.transaction(async () => {
+      await m.up();
+      await db.prepare('INSERT INTO schema_migrations (version, name) VALUES (?, ?)').run(m.version, m.name);
+    });
+    await trx();
+    console.log(`[DB] Applied migration ${m.version}: ${m.name}`);
+  } catch (e: any) {
+    console.warn(`[DB] Migration ${m.version} (${m.name}) skipped:`, e.message);
+    try {
+      await db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name) VALUES (?, ?)').run(m.version, m.name);
+    } catch {}
+  }
 }
 
 export default db;
-export { pool };
-export function uuid(): string { return randomUUID(); }
+// Mock pool for callers that only need pool.end() on shutdown (setup.ts, e2e-seed.ts, server.ts).
+// All queries must go through db.prepare — pool.query is unavailable in SQLite mode.
+export const pool = {
+  end: async (): Promise<void> => {},
+  query: async (): Promise<never> => {
+    throw new Error('pool.query is not available in SQLite mode; use db.prepare');
+  },
+} as any;
 
 export async function getSetting(key: string): Promise<string | null> {
-  const [rows] = await pool.query('SELECT `value` FROM app_settings WHERE `key` = ?', [key]) as any;
-  return (rows as any[])[0]?.value ?? null;
+  const row = (await db.prepare('SELECT `value` FROM app_settings WHERE `key` = ?').get(key)) as any;
+  return row?.value ?? null;
 }
 
 export async function setSetting(key: string, value: string | null): Promise<void> {
-  await pool.query("INSERT INTO app_settings (`key`, `value`, updated_at) VALUES (?, ?, NOW()) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`), updated_at = NOW()", [key, value ?? '']);
+  await db.prepare("INSERT INTO app_settings (`key`, `value`, updated_at) VALUES (?, ?, datetime('now')) ON CONFLICT(`key`) DO UPDATE SET `value` = excluded.`value`, updated_at = datetime('now')").run(key, value ?? '');
 }

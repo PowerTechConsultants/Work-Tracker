@@ -10,7 +10,7 @@ describe('database migrations', () => {
   });
 
   it('creates all core tables', async () => {
-    const rows = (await db.prepare('SELECT TABLE_NAME as name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE()').all()) as any[];
+    const rows = (await db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all()) as any[];
     const names = new Set(rows.map((r) => r.name));
     for (const t of ['users', 'attendance', 'leaves', 'tasks', 'notifications', 'documents', 'holidays', 'activity_logs']) {
       // documents table may be named document_requests

@@ -13,6 +13,7 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/src/db/schema.mysql.sql ./src/db/schema.mysql.sql
+COPY --from=builder /app/src/db/schema.sql ./src/db/schema.sql
 RUN mkdir -p /app/data /app/backup && chown -R app:nodejs /app
 USER app
 EXPOSE 4001

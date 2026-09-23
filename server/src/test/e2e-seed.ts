@@ -1,12 +1,10 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-// Neutralize DATABASE_URL first: db/index.ts prefers it over MYSQL_*,
-// and local server/.env points it at the dev database.
-// Empty string (not delete): db/index.ts calls dotenv.config() on import,
-// which would restore a deleted var from server/.env.
+// Force the isolated hr_test SQLite file (never the dev data.db).
+import path from 'path';
 process.env.DATABASE_URL = '';
-process.env.MYSQL_DATABASE = 'hr_test';
+process.env.SQLITE_PATH = path.join(process.cwd(), 'hr_test.db');
 
 const dbModule = await import('../db/index.js');
 const db = dbModule.default as any;
@@ -17,10 +15,9 @@ import { randomUUID } from 'crypto';
 
 // Seeds a known director for Playwright E2E runs (hr_test only).
 // Usage: npx tsx src/test/e2e-seed.ts
-// Safe by design: refuses to run against any other database.
-const usingRows = (await db.prepare('SELECT DATABASE() AS db').get()) as any;
-const usingDb = usingRows?.db;
-if (usingDb !== 'hr_test') {
+// Safe by design: refuses to run against any other database file.
+const usingDb = process.env.SQLITE_PATH || '';
+if (!usingDb.includes('hr_test')) {
   console.error(`[E2ESeed] Refusing to seed non-test database: "${usingDb}".`);
   process.exit(1);
 }
