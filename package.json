@@ -24,6 +24,7 @@
     "test": "npm test -w server && npm test -w web"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "better-sqlite3": "file:vendor/better-sqlite3"
   },
   "devDependencies": {

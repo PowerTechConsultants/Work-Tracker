@@ -1,5 +1,5 @@
 import request from 'supertest';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
 import { createApp } from '../app.js';
 import db from '../db/index.js';

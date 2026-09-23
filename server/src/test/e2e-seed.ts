@@ -10,7 +10,7 @@ const dbModule = await import('../db/index.js');
 const db = dbModule.default as any;
 const pool = dbModule.pool as any;
 
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
 
 // Seeds a known director for Playwright E2E runs (hr_test only).

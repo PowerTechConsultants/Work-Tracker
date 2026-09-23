@@ -1,4 +1,4 @@
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import db, { uuid } from '../../db/index.js';
 import { AppError } from '../../lib/app-error.js';
 import { bcryptBreaker } from '../../lib/circuit-breaker.js';
