@@ -23,13 +23,22 @@ for (const entry of fs.readdirSync(serverSourceBuild)) {
   fs.cpSync(path.join(serverSourceBuild, entry), path.join(outputDir, entry), { recursive: true });
 }
 const serverPackage = JSON.parse(fs.readFileSync(serverPackageFile, 'utf8'));
+// Strip file: and native deps from dist/package.json.
+// The runtime loads all modules from the repo root node_modules (where
+// npm installs the vendored file: deps). Dist/package.json is only for
+// Hostinger's metadata; listing better-sqlite3 here makes npm try to
+// install it inside dist/ where vendor/ doesn't exist, falling back to
+// the npm registry package that requires node-gyp (Python 3.6 fails).
+const runtimeDeps = Object.fromEntries(
+  Object.entries(serverPackage.dependencies || {}).filter(([k]) => k !== 'better-sqlite3' && k !== 'bcryptjs')
+);
 fs.writeFileSync(path.join(outputDir, 'package.json'), `${JSON.stringify({
   name: 'employee-work-tracker-runtime',
   version: serverPackage.version,
   private: true,
   type: 'module',
   scripts: { start: 'node server.js' },
-  dependencies: serverPackage.dependencies,
+  dependencies: runtimeDeps,
 }, null, 2)}\n`);
 fs.mkdirSync(path.join(outputDir, 'src', 'db'), { recursive: true });
 fs.copyFileSync(schemaFile, path.join(outputDir, 'src', 'db', 'schema.mysql.sql'));
